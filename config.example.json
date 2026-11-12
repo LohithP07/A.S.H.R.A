@@ -1,0 +1,11 @@
+{
+  "api_key": "PUT-YOUR-NVIDIA-API-KEY-HERE",
+  "model": "nvidia/nemotron-3.5-super-vl-120b-a12b",
+  "provider": "nvidia",
+  "api_base": "https://integrate.api.nvidia.com/v1/chat/completions",
+  "max_notes": 6,
+  "max_history": 8,
+  "max_tokens": 2048,
+  "temperature": 0.2,
+  "note_chars": 4000
+}

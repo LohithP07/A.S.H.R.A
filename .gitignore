@@ -1,0 +1,13 @@
+# Secrets - keep your API key out of version control
+config.json
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Local server logs and test output
+server.out
+server.err
+test-server.out
+test-server.err

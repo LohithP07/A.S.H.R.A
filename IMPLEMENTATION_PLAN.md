@@ -410,7 +410,7 @@ notes/                      private markdown knowledge base
 ## How to run
 
 ```bash
-cd "C:\Accumulated Work\4. Projects\myjarvis"
+cd path/to/A.S.H.R.A
 python build.py          # after notes change
 python server.py         # http://127.0.0.1:4700/
 ```

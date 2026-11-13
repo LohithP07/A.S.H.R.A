@@ -1,4 +1,4 @@
-# myjarvis
+# A.S.H.R.A
 
 A lightweight, local-host chatbot and note vault built on top of an LLM. It exposes a simple UI in `viewer/`, lets you store and query Markdown notes, and answers questions by searching those notes with an LLM.
 
@@ -42,7 +42,7 @@ python build.py
 python server.py
 ```
 
-Open a browser to http://127.0.0.1:4700/ to see the Jarvis UI.
+Open a browser to http://127.0.0.1:4700/ to see the A.S.H.R.A UI.
 
 ### API
 
@@ -117,4 +117,4 @@ All contributions should pass the current tests and style checks.
 
 ## License
 
-MIT (c) 2026 Jarvis Project.
+MIT (c) 2026 A.S.H.R.A Project.

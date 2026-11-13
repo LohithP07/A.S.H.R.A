@@ -1,0 +1,1748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A.S.H.R.A — Product Requirements Document</title>
+<style>
+  :root{
+    --ink:#0f172a; --muted:#475569; --faint:#64748b;
+    --line:#cbd5e1; --line-soft:#e2e8f0;
+    --accent:#0f766e; --accent-dark:#115e59; --accent-mid:#0e7490;
+    --accent-soft:#f0fdfa; --accent-line:#99f6e4;
+    --warn:#b45309; --warn-soft:#fffbeb; --warn-line:#fde68a;
+    --danger:#b91c1c; --danger-soft:#fef2f2; --danger-line:#fecaca;
+    --panel:#f8fafc;
+  }
+  *{box-sizing:border-box}
+  html{font-size:10.2pt}
+  body{
+    margin:0; color:var(--ink); background:#fff;
+    font-family:"Segoe UI","Helvetica Neue",Arial,sans-serif;
+    line-height:1.5; -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,h4{color:var(--ink); line-height:1.2; margin:0 0 8px; page-break-after:avoid}
+  h1{font-size:30pt; letter-spacing:-.025em; font-weight:650}
+  h2{font-size:18pt; letter-spacing:-.015em; padding-bottom:7px; border-bottom:2px solid var(--ink); margin-bottom:14px}
+  h2 .n{display:inline-block; font-size:9.6pt; vertical-align:middle; background:var(--ink); color:#fff; border-radius:3px; padding:3px 8px; margin-right:10px; letter-spacing:.03em; position:relative; top:-2px}
+  .kicker{font-size:10.6pt; color:var(--muted); margin:-4px 0 16px; max-width:150mm}
+  h3{font-size:12.6pt; color:var(--accent-dark); margin-top:20px}
+  h4{font-size:10.6pt; margin-top:14px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted)}
+  p{margin:0 0 9px}
+  ul,ol{margin:6px 0 11px 19px; padding:0}
+  li{margin:0 0 4px}
+  strong{color:var(--ink); font-weight:650}
+  em{color:var(--muted)}
+  a{color:var(--accent-dark); text-decoration:none}
+  code{font-family:"Cascadia Mono",Consolas,monospace; font-size:8.6pt; background:#f1f5f9; border:1px solid var(--line-soft); padding:1px 4px; border-radius:3px; white-space:nowrap}
+  pre{font-family:"Cascadia Mono",Consolas,monospace; font-size:7.9pt; line-height:1.32; background:#f8fafc; border:1px solid var(--line-soft); border-left:3px solid var(--accent); border-radius:4px; padding:9px 12px; margin:8px 0 12px; white-space:pre-wrap; page-break-inside:avoid}
+  pre code{background:none; border:0; padding:0; white-space:pre-wrap}
+
+  .section{page-break-before:auto; margin-top:26px}
+  .section.newpage{page-break-before:always; margin-top:0}
+  .brandline{page-break-after:avoid}
+  .keep{page-break-inside:avoid}
+  .muted{color:var(--muted)}
+  .small{font-size:9pt}
+  .center{text-align:center}
+
+  /* cover */
+  .cover{height:238mm; display:flex; flex-direction:column; justify-content:space-between; page-break-after:always}
+  .cover-top{border-top:12px solid var(--accent); padding-top:26px}
+  .brandline{display:flex; justify-content:space-between; align-items:baseline; font-size:8.6pt; letter-spacing:.16em; text-transform:uppercase; color:var(--faint); margin-bottom:34px}
+  .brandline b{color:var(--accent-dark); letter-spacing:.2em}
+  .cover h1{font-size:44pt; margin:0 0 4px; letter-spacing:-.035em}
+  .cover .sub{font-size:16pt; color:var(--muted); font-weight:400; margin:0 0 26px; letter-spacing:-.01em}
+  .cover .rule{height:1px; background:var(--line); margin:22px 0}
+  .cover .lede{font-size:12.4pt; color:var(--muted); max-width:135mm; line-height:1.55}
+  .cover-bottom{display:flex; flex-direction:column; gap:14px}
+  .meta-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:0; border-top:1px solid var(--line); border-bottom:1px solid var(--line)}
+  .meta-grid div{padding:11px 12px 11px 0}
+  .meta-grid div+div{border-left:1px solid var(--line-soft); padding-left:12px}
+  .meta-grid dt{font-size:7.8pt; text-transform:uppercase; letter-spacing:.12em; color:var(--faint); margin-bottom:3px}
+  .meta-grid dd{margin:0; font-size:9.4pt; font-weight:600}
+  .confidential{font-size:8.2pt; color:var(--faint); letter-spacing:.04em; text-transform:uppercase}
+
+  /* cover middle */
+  .cover-mid{padding:16px 0 0; border-top:1px solid var(--line)}
+  .cover-mid .ck{font-size:7.8pt; letter-spacing:.16em; text-transform:uppercase; color:var(--faint); margin-bottom:12px}
+  .cover-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:22px}
+  .cover-grid b{display:block; font-size:9.4pt; color:var(--accent-dark); margin-bottom:4px}
+  .cover-grid span{font-size:8.8pt; color:var(--muted); line-height:1.45}
+
+  /* doc control */
+  .doc-meta{display:grid; grid-template-columns:1fr 1fr; gap:10px 26px; margin:14px 0 18px}
+  .doc-meta div{display:flex; justify-content:space-between; border-bottom:1px dotted var(--line); padding-bottom:5px; font-size:9.4pt}
+  .doc-meta span:first-child{color:var(--faint); text-transform:uppercase; font-size:7.9pt; letter-spacing:.1em}
+  .doc-meta span:last-child{font-weight:600}
+
+  /* toc */
+  .toc{margin-top:6px}
+  .toc-row{display:flex; align-items:baseline; gap:8px; padding:4.5px 0; border-bottom:1px dotted var(--line-soft); font-size:9.9pt}
+  .toc-row .n{width:22px; color:var(--accent); font-weight:700; font-size:9pt}
+  .toc-row .t{flex:1}
+  .toc-row .pg{width:26px; text-align:right; color:var(--muted); font-variant-numeric:tabular-nums; font-size:9.4pt}
+  .toc-row.sub{padding:1px 0 1px 30px; font-size:8.9pt; color:var(--muted); border-bottom:0}
+  .toc-row.sub .t{color:var(--muted)}
+
+  /* callouts */
+  .callout{border:1px solid var(--line-soft); border-left:4px solid var(--accent); background:var(--accent-soft); border-radius:4px; padding:11px 14px; margin:12px 0 14px; page-break-inside:avoid}
+  .callout .label{display:block; font-size:7.8pt; letter-spacing:.13em; text-transform:uppercase; color:var(--accent-dark); font-weight:700; margin-bottom:4px}
+  .callout p:last-child{margin-bottom:0}
+  .callout.warn{border-left-color:var(--warn); background:var(--warn-soft)}
+  .callout.warn .label{color:var(--warn)}
+  .callout.danger{border-left-color:var(--danger); background:var(--danger-soft)}
+  .callout.danger .label{color:var(--danger)}
+  .callout.plain{border-left-color:var(--faint); background:var(--panel)}
+  .callout.plain .label{color:var(--muted)}
+
+  /* tables */
+  table{width:100%; border-collapse:collapse; margin:10px 0 14px; font-size:9pt; page-break-inside:auto}
+  thead{display:table-header-group}
+  tr{page-break-inside:avoid}
+  th{text-align:left; font-size:7.8pt; text-transform:uppercase; letter-spacing:.09em; color:var(--muted); border-bottom:1.5px solid var(--ink); padding:7px 8px; vertical-align:bottom}
+  td{padding:7px 8px; border-bottom:1px solid var(--line-soft); vertical-align:top}
+  tbody tr:nth-child(even) td{background:#fbfcfd}
+  td.tight,th.tight{width:1%; white-space:nowrap}
+  .table-note{font-size:8.2pt; color:var(--faint); margin:-8px 0 14px}
+
+  /* pills and tags */
+  .pill{display:inline-block; font-size:7.4pt; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:2px 6px; border-radius:3px; border:1px solid var(--line); color:var(--muted); background:#fff; white-space:nowrap}
+  .pill.must{color:#065f46; border-color:#a7f3d0; background:#ecfdf5}
+  .pill.should{color:#92400e; border-color:#fde68a; background:#fffbeb}
+  .pill.could{color:#3730a3; border-color:#c7d2fe; background:#eef2ff}
+  .pill.local{color:#115e59; border-color:#99f6e4; background:#f0fdfa}
+  .pill.cloud{color:#1e40af; border-color:#bfdbfe; background:#eff6ff}
+  .pill.never{color:#991b1b; border-color:#fecaca; background:#fef2f2}
+
+  /* cards */
+  .cards{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:12px 0}
+  .card{border:1px solid var(--line-soft); border-radius:4px; padding:11px 13px; background:#fff; page-break-inside:avoid}
+  .card h4{margin:0 0 5px; color:var(--accent-dark); font-size:9.4pt; letter-spacing:.04em}
+  .card p{margin:0; font-size:9pt; color:var(--muted)}
+  .cards.three{grid-template-columns:1fr 1fr 1fr}
+
+  /* stat strip */
+  .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:0; border:1px solid var(--line-soft); border-radius:4px; margin:14px 0; page-break-inside:avoid}
+  .stats div{padding:11px 12px; border-right:1px solid var(--line-soft)}
+  .stats div:last-child{border-right:0}
+  .stats b{display:block; font-size:15pt; color:var(--accent-dark); letter-spacing:-.02em; line-height:1.1}
+  .stats span{font-size:7.8pt; text-transform:uppercase; letter-spacing:.09em; color:var(--faint)}
+
+  /* flow diagram */
+  .flow{border:1px solid var(--line-soft); background:var(--panel); border-radius:4px; padding:14px; margin:12px 0 16px; page-break-inside:avoid}
+  .flow-row{display:flex; align-items:stretch; gap:6px; margin-bottom:6px}
+  .flow-row:last-child{margin-bottom:0}
+  .node{flex:1; background:#fff; border:1px solid var(--line); border-radius:3px; padding:7px 8px; text-align:center; font-size:8.3pt; line-height:1.3}
+  .node b{display:block; font-size:8.6pt; color:var(--accent-dark)}
+  .node.dark{background:var(--ink); border-color:var(--ink); color:#e2e8f0}
+  .node.dark b{color:#fff}
+  .node.soft{background:var(--accent-soft); border-color:var(--accent-line)}
+  .arrow{text-align:center; color:var(--faint); font-size:9pt; margin:2px 0 4px; letter-spacing:.3em}
+
+  /* lane diagram */
+  .lanes{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin:12px 0 14px}
+  .lane{border:1px solid var(--line-soft); border-top:4px solid var(--accent); border-radius:3px; padding:10px 11px; background:#fff; page-break-inside:avoid}
+  .lane.cloud{border-top-color:#3b82f6}
+  .lane.never{border-top-color:var(--danger)}
+  .lane h4{margin:0 0 5px; font-size:9pt; color:var(--ink)}
+  .lane ul{margin:0 0 0 15px; font-size:8.6pt; color:var(--muted)}
+  .lane li{margin-bottom:2px}
+</style>
+</head>
+<body>
+
+<!-- ================= COVER ================= -->
+<div class="cover">
+  <div class="cover-top">
+    <div class="brandline"><span><b>A.S.H.R.A</b> &nbsp;/&nbsp; local-first personal assistant</span><span>Product Requirements</span></div>
+    <h1>A.S.H.R.A</h1>
+    <p class="sub">Product Requirements Document</p>
+    <div class="rule"></div>
+    <p class="lede">A private, permissioned personal assistant that reads your email and calendar, keeps your tasks and commitments, drafts in your voice, and reaches you on Telegram — while sensitive data never leaves your machine.</p>
+  </div>
+  <div class="cover-mid">
+    <div class="ck">What this document defines</div>
+    <div class="cover-grid">
+      <div><b>01 · Product</b><span>Vision, scope, user journeys, and the hard boundary of v1.0.</span></div>
+      <div><b>02 · Trust</b><span>Privacy classes, model lanes, approvals, credentials, and retention.</span></div>
+      <div><b>03 · System</b><span>Connectors, life model, tasks, subagents, interfaces, and the roadmap.</span></div>
+    </div>
+  </div>
+  <div class="cover-bottom">
+    <div class="meta-grid">
+      <div><dt>Version</dt><dd>1.0 — Draft</dd></div>
+      <div><dt>Date</dt><dd>13 November 2026</dd></div>
+      <div><dt>Status</dt><dd>For review</dd></div>
+      <div><dt>Owner</dt><dd>Lohit</dd></div>
+    </div>
+    <div class="confidential">Local-only document · Not published · Windows 11 · Single user</div>
+  </div>
+</div>
+
+<!-- ================= DOC CONTROL ================= -->
+<div class="section newpage">
+  <div class="brandline" style="margin-bottom:18px"><span>Document control</span><span>A.S.H.R.A PRD · v1.0 Draft</span></div>
+  <h2><span class="n">i</span>Document control</h2>
+  <div class="doc-meta">
+    <div><span>Document</span><span>Product Requirements Document</span></div>
+    <div><span>Product</span><span>A.S.H.R.A</span></div>
+    <div><span>Version</span><span>1.0 — Draft</span></div>
+    <div><span>Date</span><span>13 November 2026</span></div>
+    <div><span>Status</span><span>For review and approval</span></div>
+    <div><span>Classification</span><span>Local / private</span></div>
+    <div><span>Platform</span><span>Windows 11, single user</span></div>
+    <div><span>Baseline</span><span>v0.7.1 · commit 5b774ac</span></div>
+  </div>
+
+  <h3>Purpose of this document</h3>
+  <p>This PRD defines what A.S.H.R.A is, what the first usable release must do, how it is allowed to behave with private data, and how the work is sequenced. It is written to be sufficient on its own: an engineer should be able to build from it, and the owner should be able to accept or reject the result against it.</p>
+  <p>It reflects decisions made during product discovery on 12–13 November 2026, including the choice of Gmail IMAP, Google Calendar read-only via private iCal, Telegram as the first control channel, a local task ledger, and a local model for sensitive content.</p>
+
+  <h3>How to read the requirements</h3>
+  <table>
+    <thead><tr><th class="tight">Marker</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td class="tight"><span class="pill must">Must</span></td><td>Required for v1.0. A release without it is not shippable.</td></tr>
+      <tr><td class="tight"><span class="pill should">Should</span></td><td>Expected in v1.0; may slip one milestone with an explicit note.</td></tr>
+      <tr><td class="tight"><span class="pill could">Could</span></td><td>Valuable, deferred unless it is cheap and low-risk.</td></tr>
+      <tr><td class="tight"><span class="pill local">Local</span></td><td>Runs on this machine. Content must not leave it.</td></tr>
+      <tr><td class="tight"><span class="pill cloud">Cloud</span></td><td>May use the configured cloud model; never carries private content.</td></tr>
+      <tr><td class="tight"><span class="pill never">Never</span></td><td>Out of scope by policy, not by scheduling.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Revision history</h3>
+  <table>
+    <thead><tr><th class="tight">Version</th><th class="tight">Date</th><th>Change</th></tr></thead>
+    <tbody>
+      <tr><td class="tight">0.1</td><td class="tight">12 Nov 2026</td><td>Discovery notes: assistant scope, connectors, autonomy, privacy.</td></tr>
+      <tr><td class="tight">0.5</td><td class="tight">13 Nov 2026</td><td>Locked email, calendar, task, channel, and model decisions.</td></tr>
+      <tr><td class="tight">1.0</td><td class="tight">13 Nov 2026</td><td>First complete draft for review. Supersedes the phase notes.</td></tr>
+    </tbody>
+  </table>
+
+</div>
+
+<!-- ================= CONTENTS ================= -->
+<div class="section newpage">
+  <div class="brandline" style="margin-bottom:18px"><span>Contents</span><span>A.S.H.R.A PRD · v1.0 Draft</span></div>
+  <h2><span class="n">ii</span>Contents</h2>
+  <div class="toc">
+    <div class="toc-row"><span class="n">1</span><span class="t">Executive summary</span><span class="pg" data-pg="sec1">4</span></div>
+    <div class="toc-row"><span class="n">2</span><span class="t">Product definition</span><span class="pg" data-pg="sec2">5</span></div>
+    <div class="toc-row sub"><span class="t">Vision · problem · principles · non-goals · user</span></div>
+    <div class="toc-row"><span class="n">3</span><span class="t">Scope and release boundaries</span><span class="pg" data-pg="sec3">7</span></div>
+    <div class="toc-row"><span class="n">4</span><span class="t">User journeys</span><span class="pg" data-pg="sec4">9</span></div>
+    <div class="toc-row"><span class="n">5</span><span class="t">System architecture</span><span class="pg" data-pg="sec5">10</span></div>
+    <div class="toc-row"><span class="n">6</span><span class="t">Privacy and security model</span><span class="pg" data-pg="sec6">12</span></div>
+    <div class="toc-row"><span class="n">7</span><span class="t">Connectors and channels</span><span class="pg" data-pg="sec7">15</span></div>
+    <div class="toc-row"><span class="n">8</span><span class="t">Memory, life model, and Galaxy</span><span class="pg" data-pg="sec8">18</span></div>
+    <div class="toc-row"><span class="n">9</span><span class="t">Tasks and automation</span><span class="pg" data-pg="sec9">20</span></div>
+    <div class="toc-row"><span class="n">10</span><span class="t">Subagents and model lanes</span><span class="pg" data-pg="sec10">22</span></div>
+    <div class="toc-row"><span class="n">11</span><span class="t">Interfaces and surfaces</span><span class="pg" data-pg="sec11">25</span></div>
+    <div class="toc-row"><span class="n">12</span><span class="t">Data model</span><span class="pg" data-pg="sec12">26</span></div>
+    <div class="toc-row"><span class="n">13</span><span class="t">Functional requirements</span><span class="pg" data-pg="sec13">28</span></div>
+    <div class="toc-row"><span class="n">14</span><span class="t">Non-functional requirements</span><span class="pg" data-pg="sec14">32</span></div>
+    <div class="toc-row"><span class="n">15</span><span class="t">Roadmap and milestones</span><span class="pg" data-pg="sec15">33</span></div>
+    <div class="toc-row"><span class="n">16</span><span class="t">Risks and mitigations</span><span class="pg" data-pg="sec16">35</span></div>
+    <div class="toc-row"><span class="n">17</span><span class="t">Acceptance criteria and metrics</span><span class="pg" data-pg="sec17">37</span></div>
+    <div class="toc-row"><span class="n">18</span><span class="t">Decisions log and open questions</span><span class="pg" data-pg="sec18">38</span></div>
+    <div class="toc-row"><span class="n">A</span><span class="t">Glossary</span><span class="pg" data-pg="appA">40</span></div>
+    <div class="toc-row"><span class="n">B</span><span class="t">Configuration reference</span><span class="pg" data-pg="appB">41</span></div>
+    <div class="toc-row"><span class="n">C</span><span class="t">Phase history</span><span class="pg" data-pg="appC">43</span></div>
+  </div>
+
+  <h3>Reading paths</h3>
+  <table>
+    <thead><tr><th class="tight">If you have…</th><th>Read</th></tr></thead>
+    <tbody>
+      <tr><td class="tight">Five minutes</td><td>Section 1, Section 3, and the milestone plan in Section 15.</td></tr>
+      <tr><td class="tight">An hour</td><td>Sections 1–9, then the decisions log in Section 18. For privacy, add Sections 6–7 and scenarios A9–A10.</td></tr>
+      <tr><td class="tight">To implement</td><td>Sections 5–13 and the phase exits in Section 15.2.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ================= 1. EXEC SUMMARY ================= -->
+<div class="section">
+  <div class="brandline" style="margin-bottom:18px"><span>Section 1</span><span>Executive summary</span></div>
+  <h2 id="sec1"><span class="n">1</span>Executive summary</h2>
+  <p class="kicker">A.S.H.R.A is a single-user, local-first assistant for Windows 11. It turns a stream of email, calendar events, tasks, and conversations into a small number of clear actions — and asks before it does anything that leaves the machine.</p>
+
+  <p>The project began as a 3D knowledge galaxy over markdown notes and a chat box. That foundation is complete and now serves as one surface of a larger product. The next release turns it into an assistant with a life model: who you know, what you owe, what is due, what is waiting, and what it has already done.</p>
+
+  <p>Version 1.0 is deliberately narrow. It reads Gmail over IMAP, reads Google Calendar through a private iCal address, keeps a local task ledger, drafts replies, produces a daily brief, and communicates through a Telegram bot with approval buttons. It does not send email, modify a calendar, move money, or touch health data without explicit, per-action approval. It does not read your personal Telegram chats, and it cannot place phone calls.</p>
+
+  <div class="stats">
+    <div><b>1</b><span>user, 1 machine</span></div>
+    <div><b>6</b><span>core subagents</span></div>
+    <div><b>3</b><span>model lanes</span></div>
+    <div><b>0</b><span>secrets in git</span></div>
+  </div>
+
+  <h3>The problem</h3>
+  <p>Personal administration is not hard because any single task is hard. It is hard because the inputs are scattered and the cost of switching is high. An ask arrives in email, a deadline sits in a calendar invite, a promise is made in a chat, and a bill is due on a date nobody wrote down. Existing assistants solve this by sending everything to a cloud service, which is exactly the trade the owner does not want to make.</p>
+
+  <h3>The product bet</h3>
+  <p>A small local model, paired with deterministic pipelines, is good enough for triage, extraction, summarisation, and short drafts. Complex planning and tool orchestration should not be delegated to a 3B–4B model. Instead, the system keeps a structured life model, uses rules for anything that must be exact, and uses the local model only where language understanding is genuinely required. Cloud models remain available for non-sensitive work.</p>
+
+  <div class="callout">
+    <span class="label">Core promise</span>
+    <p><strong>Nothing private leaves this machine, and nothing irreversible happens without a decision.</strong> Every read, draft, approval, and action is attributable, reviewable, and reversible where the underlying system allows it.</p>
+  </div>
+
+  <h3>What v1.0 delivers</h3>
+  <div class="cards">
+    <div class="card"><h4>Inbox awareness</h4><p>Read-only Gmail ingestion with thread reconstruction, local classification, ask extraction, and proposed tasks. Bodies stay on disk.</p></div>
+    <div class="card"><h4>Calendar awareness</h4><p>Private iCal ingestion, recurrence expansion, conflict detection, and free-slot search for scheduling suggestions.</p></div>
+    <div class="card"><h4>Daily brief and follow-ups</h4><p>A morning brief with today's events, three must-dos, waiting-on items, and one thing to ignore. Unanswered commitments are tracked.</p></div>
+    <div class="card"><h4>Drafts with approval</h4><p>Replies drafted in your voice, stored in a local outbox, and sent only after an explicit approval from the Desk or Telegram.</p></div>
+    <div class="card"><h4>Phone control</h4><p>A Telegram bot for briefs, commands, and one-tap approvals, restricted to an allowlisted chat with expiring nonces.</p></div>
+    <div class="card"><h4>Life-model Galaxy</h4><p>A world-model explorer over memories, people, projects, tasks, events, and sources. Works with zero notes.</p></div>
+  </div>
+
+  <h3>What v1.0 withholds</h3>
+  <p>Sending to new recipients, deleting mail, changing calendars, payments, purchases, health actions, smart-home control, arbitrary shell, and any reading of personal chat accounts are out of scope. So is multi-user support, macOS, Linux, and mobile native apps. The architecture leaves room for them; the release does not pretend to include them.</p>
+
+  <h3>Delivery shape</h3>
+  <p>Work proceeds in small, reviewable phases on named branches, each squash-merged after review. The immediate next step is the connector foundation, which requires no credentials and no model, followed by the local model router so that privacy rules are enforced before any real email is processed.</p>
+</div>
+
+<!-- ================= 2. PRODUCT DEFINITION ================= -->
+<div class="section">
+  <div class="brandline" style="margin-bottom:18px"><span>Section 2</span><span>Product definition</span></div>
+  <h2 id="sec2"><span class="n">2</span>Product definition</h2>
+  <p class="kicker">What A.S.H.R.A is, what it refuses to be, and the principles that decide close calls.</p>
+
+  <h3>2.1 Vision</h3>
+  <p>A calm, private assistant that holds the administrative shape of a life — commitments, deadlines, people, and open loops — and reduces it to a short, honest answer: <em>here is what needs you, and here is what I have already handled.</em></p>
+
+  <h3>2.2 Problem statement</h3>
+  <p>The owner runs a working life across email, a calendar, a browser, local files, and chat. The information needed to act is present but fragmented, and each fragment has a different interface. The result is recurring low-grade overhead: re-reading threads to find the ask, remembering promises made in passing, noticing a deadline only when it is close, and rebuilding context before every meeting.</p>
+  <p>Generic assistants reduce that overhead by centralising content in a vendor cloud. That solves the fragmentation problem by creating a privacy problem. A.S.H.R.A takes the opposite constraint as its starting point: <strong>the machine is the trust boundary</strong>. It must be useful without uploading mail, attachments, calendar detail, or contacts.</p>
+
+  <h3>2.3 Design principles</h3>
+  <table>
+    <thead><tr><th class="tight">#</th><th>Principle</th><th>Consequence</th></tr></thead>
+    <tbody>
+      <tr><td class="tight">P1</td><td><strong>Local is the default, not a mode.</strong></td><td>Private content is processed locally. Cloud calls are an explicit exception with a visible reason.</td></tr>
+      <tr><td class="tight">P2</td><td><strong>Deterministic where correctness matters.</strong></td><td>Dates, recurrence, dedupe, routing, and permissions are code, not model output.</td></tr>
+      <tr><td class="tight">P3</td><td><strong>Propose, then act.</strong></td><td>Every external write has a reviewable proposal and an approval record.</td></tr>
+      <tr><td class="tight">P4</td><td><strong>Structure over screenshots.</strong></td><td>Prefer APIs, IMAP, iCal, and files. Use browser automation only when no structured path exists.</td></tr>
+      <tr><td class="tight">P5</td><td><strong>One brain, many workers.</strong></td><td>One orchestrator owns conversation and approval. Subagents are scoped and cannot act alone.</td></tr>
+      <tr><td class="tight">P6</td><td><strong>Show your evidence.</strong></td><td>Every claim links to the memory, message, or event that supports it.</td></tr>
+      <tr><td class="tight">P7</td><td><strong>Degrade honestly.</strong></td><td>No key, no model, no network, or no connector must produce a clear limitation, never a fabricated answer.</td></tr>
+      <tr><td class="tight">P8</td><td><strong>Small surface, sharp edges.</strong></td><td>Fewer tools, each with a narrow scope, an explicit schema, and a known blast radius.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>2.4 Non-goals</h3>
+  <ul>
+    <li><strong>Not a general chatbot.</strong> Chat is one interface to the life model, not the product's centre.</li>
+    <li><strong>Not a multi-user or team product.</strong> One owner, one machine, one identity. No sharing, no tenancy, no admin console.</li>
+    <li><strong>Not a cloud sync service.</strong> There is no A.S.H.R.A account and no vendor-side storage of private content.</li>
+    <li><strong>Not an autonomous agent that acts unattended.</strong> Unattended work is limited to reads, local writes, and notifications to the owner.</li>
+    <li><strong>Not a financial or medical advisor.</strong> Financial and health data are excluded from automation and model reasoning by policy.</li>
+    <li><strong>Not a replacement for a calendar or mail client.</strong> It reads, summarises, drafts, and proposes; the native clients remain authoritative.</li>
+  </ul>
+
+  <h3>2.5 The user</h3>
+  <div class="cards">
+    <div class="card">
+      <h4>Primary user — the owner</h4>
+      <p>One technical Windows user who works across email, a browser, documents, and code. Comfortable with a terminal and a config file. Values privacy over convenience, but will not tolerate friction that repeats every day.</p>
+    </div>
+    <div class="card">
+      <h4>Secondary users — none</h4>
+      <p>People who email or message the owner interact with drafts and replies, never with the assistant directly. They are never asked to install anything or create an account.</p>
+    </div>
+  </div>
+
+  <h3>2.6 Jobs to be done</h3>
+  <table>
+    <thead><tr><th class="tight">When…</th><th>I want to…</th><th>So that…</th></tr></thead>
+    <tbody>
+      <tr><td>I open my laptop</td><td>see the shape of the day in under thirty seconds</td><td>I start on the right thing instead of the newest thing.</td></tr>
+      <tr><td>an email arrives with an ask</td><td>have it turned into a task or a draft</td><td>nothing is lost in the inbox and I do not re-read the thread.</td></tr>
+      <tr><td>I promise something in passing</td><td>have it captured without ceremony</td><td>the promise does not quietly expire.</td></tr>
+      <tr><td>I am away from my desk</td><td>approve or reject a draft from my phone</td><td>work does not stall on my location.</td></tr>
+      <tr><td>I ask what I know about a person</td><td>see the threads, promises, and tasks in one place</td><td>I can prepare for a conversation quickly.</td></tr>
+      <tr><td>a routine repeats</td><td>have it run the same safe way every time</td><td>I stop spending attention on it.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout warn">
+    <span class="label">The one-sentence test</span>
+    <p>If the assistant cannot explain, in one line, <em>what it did, on whose behalf, with what evidence, and under which approval</em>, the feature is not ready.</p>
+  </div>
+</div>
+
+<!-- ================= 3. SCOPE ================= -->
+<div class="section">
+  <div class="brandline" style="margin-bottom:18px"><span>Section 3</span><span>Scope and release boundaries</span></div>
+  <h2 id="sec3"><span class="n">3</span>Scope and release boundaries</h2>
+  <p class="kicker">v1.0 is a daily-use assistant, not a platform. The boundary is drawn so that everything inside it can be trusted.</p>
+
+  <h3>3.1 In scope for v1.0</h3>
+  <table>
+    <thead><tr><th>Area</th><th>Included</th><th class="tight">Priority</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Email</strong></td><td>Gmail over IMAP with an app password; read-only sync; thread reconstruction; classification; ask extraction; local drafts; approved SMTP send.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td><strong>Calendar</strong></td><td>Google Calendar read-only via private iCal URL; recurrence expansion; conflicts; free slots; drafted <code>.ics</code> invites.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td><strong>Tasks</strong></td><td>Local ledger with inbox, next, waiting, scheduled, done; due dates; reminders; recurrence; dedupe; source links.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td><strong>Briefs</strong></td><td>Morning and evening briefs; waiting-on list; follow-up detection; weekly review.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td><strong>Telegram</strong></td><td>Allowlisted bot; text commands; briefs; approval buttons; quiet hours; audit of outbound messages.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td><strong>Desk</strong></td><td>Run timeline, approvals queue, outbox, audit log, connector status.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td><strong>Memory</strong></td><td>Typed memories with provenance, sensitivity, and review; capture proposals; confirmation loop.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td><strong>Galaxy</strong></td><td>Runtime world-model graph over memories, people, projects, tasks, events, sources, connectors.</td><td class="tight"><span class="pill should">Should</span></td></tr>
+      <tr><td><strong>Files and apps</strong></td><td>Allowlisted folders; dry-run preview; approved move, rename, delete-to-recycle; app launch routines.</td><td class="tight"><span class="pill should">Should</span></td></tr>
+      <tr><td><strong>Browser</strong></td><td>Playwright with a dedicated profile; allowlisted domains; research; form fill with approval before submit.</td><td class="tight"><span class="pill could">Could</span></td></tr>
+      <tr><td><strong>Scripts</strong></td><td>Manifested local scripts with argument schemas and per-run approval.</td><td class="tight"><span class="pill could">Could</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>3.2 Explicitly out of scope</h3>
+  <div class="lanes">
+    <div class="lane never">
+      <h4>Never in any release</h4>
+      <ul>
+        <li>Payment initiation or banking actions</li>
+        <li>Health, medication, or medical advice actions</li>
+        <li>Reading personal Telegram chats via a userbot</li>
+        <li>Arbitrary shell execution from model output</li>
+        <li>Sending private content to a cloud model</li>
+      </ul>
+    </div>
+    <div class="lane never" style="border-top-color:var(--warn)">
+      <h4>Not in v1.0</h4>
+      <ul>
+        <li>Sending to new recipients without approval</li>
+        <li>Calendar writes via OAuth</li>
+        <li>Voice calls and SMS</li>
+        <li>Smart-home control</li>
+        <li>Mobile native apps</li>
+        <li>macOS or Linux packaging</li>
+      </ul>
+    </div>
+    <div class="lane never" style="border-top-color:var(--faint)">
+      <h4>Later, if justified</h4>
+      <ul>
+        <li>Twilio voice and SMS</li>
+        <li>Slack and Teams connectors</li>
+        <li>Calendar write via OAuth</li>
+        <li>Local speech-to-text and TTS</li>
+        <li>Remote access beyond the LAN</li>
+        <li>Multi-device sync</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>3.3 Release definition</h3>
+  <p>v1.0 is reached when the owner can complete a normal working day using A.S.H.R.A as the first screen: read the brief, work the queue, approve or reject drafts, capture tasks by voice or text, and close the day with a review — without any private content leaving the machine and without a single unapproved external write.</p>
+
+  <div class="callout plain">
+    <span class="label">Scope discipline</span>
+    <p>A feature that cannot be described as a read, a local draft, an approved action, or a notification is probably a new product. Park it in Section 18 rather than stretching v1.0.</p>
+  </div>
+</div>
+
+<!-- ================= 4. USER JOURNEYS ================= -->
+<div class="section">
+  <div class="brandline" style="margin-bottom:18px"><span>Section 4</span><span>User journeys</span></div>
+  <h2 id="sec4"><span class="n">4</span>User journeys</h2>
+  <p class="kicker">Six journeys define the daily product. Each one states what the user does, what the system does, and where approval sits.</p>
+
+  <h3>4.1 Morning brief</h3>
+  <table>
+    <thead><tr><th class="tight">Step</th><th>Actor</th><th>Behaviour</th></tr></thead>
+    <tbody>
+      <tr><td class="tight">1</td><td>Scheduler</td><td>At the configured wake time, builds a brief from today's events, tasks, waiting-on items, and overnight email.</td></tr>
+      <tr><td class="tight">2</td><td>Local model</td><td>Ranks at most three must-dos and writes one line of context for each. No email body is quoted.</td></tr>
+      <tr><td class="tight">3</td><td>Telegram</td><td>Delivers the brief with buttons: <em>Open Desk</em>, <em>Snooze 1h</em>, <em>Quiet today</em>.</td></tr>
+      <tr><td class="tight">4</td><td>User</td><td>Reads on phone, taps through to the Desk for detail, or replies with a command.</td></tr>
+    </tbody>
+  </table>
+  <p class="small muted"><strong>Approval:</strong> none required. The brief is outbound to the owner only and contains summaries, never bodies or attachments.</p>
+
+  <h3>4.2 Inbox triage to draft</h3>
+  <table>
+    <thead><tr><th class="tight">Step</th><th>Actor</th><th>Behaviour</th></tr></thead>
+    <tbody>
+      <tr><td class="tight">1</td><td>Connector</td><td>Fetches new mail with <code>BODY.PEEK</code>, so nothing is marked read. Stores headers and bodies locally.</td></tr>
+      <tr><td class="tight">2</td><td>Pipeline</td><td>Reconstructs threads, strips signatures and quotes, detects newsletters and receipts by rule.</td></tr>
+      <tr><td class="tight">3</td><td><code>inbox_triager</code></td><td>Classifies each thread: reply needed, waiting, informational, or ignore. Extracts asks, people, and dates.</td></tr>
+      <tr><td class="tight">4</td><td>System</td><td>Proposes tasks and memories. Creates nothing without confirmation, except explicit user requests.</td></tr>
+      <tr><td class="tight">5</td><td><code>writer</code></td><td>On request or by rule, drafts a reply in the owner's voice. Saves it to the local outbox.</td></tr>
+      <tr><td class="tight">6</td><td>User</td><td>Reviews in the Desk, edits, then approves. Send is a separate, explicit action.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>4.3 Promise capture</h3>
+  <p>The user says or types: <em>"Remember that I promised Sarah the deck by Tuesday."</em> The assistant creates a task with <code>person = Sarah</code>, <code>due = Tuesday</code>, <code>status = next</code>, links the source message, and confirms in one line: <em>"Captured: send Sarah the deck, due Tue 17 Nov."</em> No further dialogue. If the date is ambiguous, it asks exactly one clarifying question.</p>
+
+  <h3>4.4 Phone approval</h3>
+  <table>
+    <thead><tr><th class="tight">Step</th><th>Actor</th><th>Behaviour</th></tr></thead>
+    <tbody>
+      <tr><td class="tight">1</td><td>System</td><td>Posts a draft summary to Telegram with <em>Approve</em>, <em>Edit in Desk</em>, <em>Reject</em>. The message carries a one-time nonce valid for 24 hours.</td></tr>
+      <tr><td class="tight">2</td><td>User</td><td>Taps <em>Approve</em>.</td></tr>
+      <tr><td class="tight">3</td><td>Approval service</td><td>Validates chat allowlist, nonce, expiry, and current draft hash. Rejects stale or replayed taps.</td></tr>
+      <tr><td class="tight">4</td><td>Operator</td><td>Sends through SMTP. Writes an audit record with recipient count, draft hash, and approval id.</td></tr>
+      <tr><td class="tight">5</td><td>Telegram</td><td>Confirms: <em>"Sent to Sarah (1 recipient)."</em> The button is removed.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>4.5 Scheduling a meeting</h3>
+  <p>The user asks for thirty minutes with Sarah next week. <code>calendar_scout</code> reads the local calendar cache, finds three candidate slots that avoid conflicts and respect working hours, and <code>scheduler</code> drafts an invite as an <code>.ics</code> file plus an email draft. Nothing is sent and no event is created. The user approves, then either sends the draft or imports the <code>.ics</code> into Google Calendar.</p>
+
+  <h3>4.6 File cleanup and app routines</h3>
+  <table>
+    <thead><tr><th class="tight">Step</th><th>Actor</th><th>Behaviour</th></tr></thead>
+    <tbody>
+      <tr><td class="tight">1</td><td>User</td><td>"Clean up Downloads."</td></tr>
+      <tr><td class="tight">2</td><td><code>file_operator</code></td><td>Scans an allowlisted root, groups by type and age, and produces a dry-run plan with counts and total size.</td></tr>
+      <tr><td class="tight">3</td><td>Desk</td><td>Shows every move and rename. Deletions go to the Recycle Bin, never permanent.</td></tr>
+      <tr><td class="tight">4</td><td>User</td><td>Approves the batch once. The operator executes and records each operation.</td></tr>
+      <tr><td class="tight">5</td><td>System</td><td>Offers to save the batch as a reusable routine with its own scope and approval policy.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>4.7 End of day</h3>
+  <p>An evening brief summarises what moved, what is still waiting, and what tomorrow looks like. It proposes up to three tasks for tomorrow and asks one question: <em>"Anything to add before I close the day?"</em> The answer is captured as a task or memory, and quiet hours begin.</p>
+</div>
+
+<!-- ================= 5. ARCHITECTURE ================= -->
+<div class="section">
+  <div class="brandline" style="margin-bottom:18px"><span>Section 5</span><span>System architecture</span></div>
+  <h2 id="sec5"><span class="n">5</span>System architecture</h2>
+  <p class="kicker">One FastAPI process, one SQLite database, one local model, and a set of narrow connectors. Everything private stays inside this boundary.</p>
+
+  <h3>5.1 Layered view</h3>
+  <div class="flow">
+    <div class="flow-row">
+      <div class="node soft"><b>Surfaces</b>Home · Brain · Desk · Galaxy · Telegram</div>
+    </div>
+    <div class="arrow">▼</div>
+    <div class="flow-row">
+      <div class="node dark"><b>Orchestrator</b>conversation · routing · approval gate · budgets</div>
+    </div>
+    <div class="arrow">▼</div>
+    <div class="flow-row">
+      <div class="node"><b>Agents</b>perceive · plan · produce · execute · watch · govern</div>
+      <div class="node"><b>Model router</b>local · cloud · refuse</div>
+      <div class="node"><b>Policy guard</b>sensitivity · scope · injection</div>
+    </div>
+    <div class="arrow">▼</div>
+    <div class="flow-row">
+      <div class="node"><b>Life model</b>memories · people · projects · tasks · events · sources</div>
+      <div class="node"><b>Tool registry</b>read · draft · act · admin</div>
+    </div>
+    <div class="arrow">▼</div>
+    <div class="flow-row">
+      <div class="node"><b>Connectors</b>Gmail IMAP · Calendar iCal · files · browser</div>
+      <div class="node"><b>Channels</b>Telegram · desktop</div>
+      <div class="node"><b>Store</b>SQLite · credential refs · audit</div>
+    </div>
+  </div>
+  <p class="table-note">F-1 — Layered system architecture. Arrows show the only permitted direction of calls; lower layers never call upward.</p>
+
+  <h3>5.2 Components</h3>
+  <table>
+    <thead><tr><th class="tight">Component</th><th>Responsibility</th><th>Must not</th></tr></thead>
+    <tbody>
+      <tr><td class="tight"><code>api</code></td><td>HTTP routes, request validation, static surfaces, SSE streaming.</td><td>Hold business logic or secrets in responses.</td></tr>
+      <tr><td class="tight"><code>orchestrator</code></td><td>Owns the turn: plan, dispatch, collect proposals, request approval, record the run.</td><td>Let a subagent act without an approval record.</td></tr>
+      <tr><td class="tight"><code>model_router</code></td><td>Selects local, cloud, or refusal by sensitivity and task type.</td><td>Fall back to cloud when the local model fails.</td></tr>
+      <tr><td class="tight"><code>policy_guard</code></td><td>Checks sensitivity, tool scope, grant validity, and injection signals.</td><td>Be bypassable by prompt text or tool arguments.</td></tr>
+      <tr><td class="tight"><code>memory</code></td><td>Typed memories, retrieval, graph edges, sensitivity, lifecycle.</td><td>Store a memory without provenance.</td></tr>
+      <tr><td class="tight"><code>tasks</code></td><td>Local ledger, status transitions, recurrence, dedupe, reminders.</td><td>Create an extracted task without confirmation.</td></tr>
+      <tr><td class="tight"><code>connectors/*</code></td><td>One adapter per external system, with a capability declaration.</td><td>Exceed its declared read/write capability.</td></tr>
+      <tr><td class="tight"><code>channels/*</code></td><td>Outbound delivery, inbound commands, approval UI.</td><td>Send private bodies or accept unknown identities.</td></tr>
+      <tr><td class="tight"><code>credentials</code></td><td>Windows Credential Manager wrapper; returns opaque refs only.</td><td>Write secrets to config, SQLite, logs, or git.</td></tr>
+      <tr><td class="tight"><code>audit</code></td><td>Append-only record of reads, drafts, approvals, actions, and outbound messages.</td><td>Store message bodies or attachment contents.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>5.3 Turn lifecycle</h3>
+  <ol>
+    <li><strong>Intake.</strong> A surface submits a request with an identity and a surface tag. Telegram requests must match the allowlisted chat.</li>
+    <li><strong>Classify.</strong> The router determines intent deterministically where possible. Only ambiguous intent reaches a model.</li>
+    <li><strong>Scope.</strong> The policy guard computes the maximum permission and the permitted model lane for this turn.</li>
+    <li><strong>Gather.</strong> Read tools and agents collect evidence. Every item carries a source reference and sensitivity.</li>
+    <li><strong>Produce.</strong> A produce agent writes text or a proposal. Output is validated against a schema before it is shown.</li>
+    <li><strong>Decide.</strong> If the turn implies an external write, the orchestrator creates an approval request with a payload hash.</li>
+    <li><strong>Act.</strong> On approval, a domain operator executes exactly the approved payload. The payload is immutable after approval.</li>
+    <li><strong>Record.</strong> The run, tokens, cost, evidence ids, approval id, and result are written to the audit log.</li>
+  </ol>
+
+  <h3>5.4 Deployment shape</h3>
+  <pre><code>Windows 11 host
+├─ python server.py            FastAPI on 127.0.0.1:4700
+├─ ollama serve                local model on 127.0.0.1:11434
+├─ data/ashra.db               SQLite: sessions, tasks, memories, audit
+├─ data/cache/                 email and calendar cache (encrypted at rest)
+├─ data/outbox/                drafts and generated .ics files
+├─ config.json                 non-secret configuration only
+└─ Windows Credential Manager  IMAP password, iCal URL, Telegram token</code></pre>
+  <p>The server binds to loopback only. There is no inbound port, no tunnel, and no public URL in v1.0. Telegram uses long polling, so the assistant reaches out rather than listening.</p>
+
+  <div class="callout">
+    <span class="label">Architectural invariant</span>
+    <p>The orchestrator is the only component allowed to request approval, and domain operators are the only components allowed to execute external writes. No agent holds both capabilities.</p>
+  </div>
+</div>
+
+<!-- ================= 6. PRIVACY & SECURITY ================= -->
+<div class="section">
+  <div class="brandline" style="margin-bottom:18px"><span>Section 6</span><span>Privacy and security model</span></div>
+  <h2 id="sec6"><span class="n">6</span>Privacy and security model</h2>
+  <p class="kicker">Privacy is not a setting. It is a set of classifications and gates that every request passes through before it reaches a model, a channel, or a tool.</p>
+
+  <h3>6.1 Sensitivity classes</h3>
+  <table>
+    <thead><tr><th class="tight">Class</th><th>Examples</th><th>Model</th><th>Channel</th></tr></thead>
+    <tbody>
+      <tr><td class="tight"><span class="pill">Public</span></td><td>Web pages, public documentation, general knowledge.</td><td>Cloud or local</td><td>Allowed</td></tr>
+      <tr><td class="tight"><span class="pill">Internal</span></td><td>Personal notes, project plans, non-sensitive research.</td><td>Cloud or local</td><td>Summaries</td></tr>
+      <tr><td class="tight"><span class="pill local">Private</span></td><td>Email bodies, calendar details, contacts, drafts, tasks.</td><td><strong>Local only</strong></td><td>Counts and summaries</td></tr>
+      <tr><td class="tight"><span class="pill local">Sensitive</span></td><td>Attachments, identity documents, private conversations, credentials metadata.</td><td><strong>Local only</strong></td><td>Never</td></tr>
+      <tr><td class="tight"><span class="pill never">Secret</span></td><td>Financial records, health information, passwords, tokens.</td><td><strong>No model</strong></td><td>Never</td></tr>
+    </tbody>
+  </table>
+  <p>Classification is assigned at ingestion, inherited by derived records, and never downgraded automatically. A mixed request takes the highest class present. If classification is uncertain, the system chooses the more private class and says so.</p>
+
+  <h3>6.2 Model lanes</h3>
+  <div class="lanes">
+    <div class="lane">
+      <h4>Local lane</h4>
+      <ul>
+        <li>3B–4B model through Ollama</li>
+        <li>Email, calendar, contacts, tasks</li>
+        <li>Classification, extraction, summaries, short drafts</li>
+        <li>No network egress</li>
+      </ul>
+    </div>
+    <div class="lane cloud">
+      <h4>Cloud lane</h4>
+      <ul>
+        <li>Configured provider, OpenAI-compatible</li>
+        <li>Public and non-sensitive internal content</li>
+        <li>Research, general planning, long-form writing</li>
+        <li>Explicit reason recorded per call</li>
+      </ul>
+    </div>
+    <div class="lane never">
+      <h4>Refusal lane</h4>
+      <ul>
+        <li>Secret-class content</li>
+        <li>No model of any kind</li>
+        <li>Rules, search, and reminders only</li>
+        <li>Explains the policy to the user</li>
+      </ul>
+    </div>
+  </div>
+  <p class="table-note">F-3 — Model lane routing. The router may downgrade to local or refuse; it may never upgrade to cloud on failure.</p>
+
+  <h3>6.3 Credentials</h3>
+  <table>
+    <thead><tr><th>Secret</th><th>Storage</th><th>Used by</th></tr></thead>
+    <tbody>
+      <tr><td>Gmail app password</td><td>Windows Credential Manager, target <code>ashra/gmail</code></td><td>IMAP and SMTP connector</td></tr>
+      <tr><td>Google Calendar iCal URL</td><td>Windows Credential Manager, target <code>ashra/calendar</code></td><td>Calendar connector</td></tr>
+      <tr><td>Telegram bot token</td><td>Windows Credential Manager, target <code>ashra/telegram</code></td><td>Telegram channel</td></tr>
+      <tr><td>Cloud model API key</td><td>Windows Credential Manager or <code>config.json</code> as today</td><td>Cloud provider only</td></tr>
+    </tbody>
+  </table>
+  <p>SQLite stores a credential reference, never a value. Logs redact values by pattern and by key name. The repository ignores <code>config.json</code>, <code>data/</code>, and any file matching <code>*.secret</code>. A pre-commit check rejects high-entropy strings in tracked files.</p>
+
+  <h3>6.4 Approval state machine</h3>
+  <div class="flow">
+    <div class="flow-row">
+      <div class="node soft"><b>proposed</b>payload + hash + scope</div>
+      <div class="node"><b>pending</b>awaiting decision</div>
+      <div class="node"><b>approved</b>single use, expiring</div>
+      <div class="node"><b>executed</b>result recorded</div>
+    </div>
+    <div class="flow-row" style="margin-top:8px">
+      <div class="node" style="flex:0.5"><b>rejected</b>reason captured</div>
+      <div class="node" style="flex:0.5"><b>expired</b>no action</div>
+      <div class="node" style="flex:0.5"><b>revoked</b>before execution</div>
+      <div class="node" style="flex:0.5"><b>failed</b>no retry without review</div>
+    </div>
+  </div>
+  <p class="table-note">F-4 — Approval state machine. Approved payloads are immutable; any edit returns the request to <em>proposed</em>.</p>
+
+  <p>An approval binds four things: the exact payload, the tool and its scope, the requesting surface, and an expiry. Telegram approvals also bind the chat id and a one-time nonce. Replays, stale hashes, and edits after approval are rejected and audited.</p>
+
+  <h3>6.5 Prompt-injection defence</h3>
+  <ul>
+    <li>Email, calendar, web, and document content is <strong>data, not instruction</strong>. It is wrapped in an untrusted-content envelope before it reaches a model.</li>
+    <li>The policy guard scans for directive patterns — "ignore previous instructions", "send this to", "run this command" — and raises the risk score of the turn.</li>
+    <li>Tool selection is deterministic. A model may propose an action, but it cannot add tools, widen scope, or change recipients.</li>
+    <li>Links in messages are never fetched automatically. Fetching is a separate, visible step.</li>
+    <li>Any request in content to install software, send credentials, or contact a third party is surfaced to the user as a suspected injection.</li>
+  </ul>
+
+  <h3>6.6 Data retention</h3>
+  <table>
+    <thead><tr><th>Data</th><th>Retention</th><th>Control</th></tr></thead>
+    <tbody>
+      <tr><td>Email headers and bodies</td><td>90 days by default, configurable</td><td>Purge command; per-thread delete</td></tr>
+      <tr><td>Attachments</td><td>Cached only while a task references them</td><td>Never parsed by cloud OCR</td></tr>
+      <tr><td>Calendar cache</td><td>Rolling 60 days back, 180 forward</td><td>Rebuilt on demand</td></tr>
+      <tr><td>Memories</td><td>Until forgotten</td><td>Per-item forget; source link retained in audit only</td></tr>
+      <tr><td>Audit events</td><td>1 year</td><td>Metadata only; exportable</td></tr>
+      <tr><td>Drafts and outbox</td><td>Until sent or discarded</td><td>Manual purge</td></tr>
+    </tbody>
+  </table>
+
+  <h3>6.7 Threat model</h3>
+  <table>
+    <thead><tr><th>Threat</th><th>Impact</th><th>Mitigation</th></tr></thead>
+    <tbody>
+      <tr><td>Malicious email content</td><td>Injection, data exfiltration</td><td>Untrusted envelope, deterministic tools, no auto-fetch, approval gate.</td></tr>
+      <tr><td>Stolen laptop</td><td>Mail and calendar exposure</td><td>Windows account protection, encrypted cache, credential vault, short retention.</td></tr>
+      <tr><td>Leaked bot token</td><td>Unauthorised channel access</td><td>Allowlisted chat id, token rotation, no private content in messages.</td></tr>
+      <tr><td>Cloud provider logging</td><td>Private content retention</td><td>Private content never routed to cloud; calls logged locally by hash.</td></tr>
+      <tr><td>Runaway agent loop</td><td>Cost and unintended action</td><td>Depth limit 2, token and time budgets, no subagent writes.</td></tr>
+      <tr><td>Accidental send</td><td>Reputational harm</td><td>Separate send step, recipient review, undo window where the provider allows.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout danger">
+    <span class="label">Hard rule</span>
+    <p>If a request mixes secret-class content with anything else, the whole turn is refused. The assistant may say that it cannot help with that content and offer a manual path. It may not summarise, redact, or partially process it.</p>
+  </div>
+</div>
+
+<!-- ================= 7. CONNECTORS ================= -->
+<div class="section">
+  <div class="brandline" style="margin-bottom:18px"><span>Section 7</span><span>Connectors and channels</span></div>
+  <h2 id="sec7"><span class="n">7</span>Connectors and channels</h2>
+  <p class="kicker">A connector reads or writes one external system. A channel carries messages to or from the owner. Both declare their capabilities up front, and neither may exceed them.</p>
+
+  <h3>7.1 Connector contract</h3>
+  <pre><code>Connector
+  id            "gmail" | "gcal" | "files" | "browser"
+  capabilities  { read, draft, write, delete }  // declared, enforced
+  scopes        folders, domains, calendars, roots
+  auth          credential_ref -> Windows Credential Manager
+  poll()        incremental fetch, idempotent by external id
+  normalise()   external record -> Source + Event + candidate Task
+  health()      last success, last error, backlog, latency
+  redact()      strip secrets and sensitive fields before logging</code></pre>
+  <p>Every connector is idempotent, resumable, and rate-limited. Failures degrade to a visible status in the Desk; they never silently disable a capability.</p>
+
+  <h3>7.2 Email — Gmail over IMAP</h3>
+  <div class="cards">
+    <div class="card"><h4>Transport</h4><p>IMAP over TLS with a Gmail app password stored in the credential vault. SMTP over TLS is used only in the approved-send phase.</p></div>
+    <div class="card"><h4>Read-only first</h4><p>Fetch uses <code>BODY.PEEK</code>. No <code>STORE</code>, <code>APPEND</code>, <code>EXPUNGE</code>, label change, or move in the read phase.</p></div>
+    <div class="card"><h4>Sync model</h4><p>UIDVALIDITY plus UID cursor, stored per folder. A resync is a full pass; normal operation is incremental.</p></div>
+    <div class="card"><h4>Scope</h4><p>Inbox, plus an optional allowlist of labels. Sent mail is read only to learn voice and thread context, never quoted outward.</p></div>
+  </div>
+
+  <div class="flow">
+    <div class="flow-row">
+      <div class="node"><b>IMAP</b>fetch with PEEK</div>
+      <div class="node"><b>Parse</b>MIME, headers, thread ids</div>
+      <div class="node"><b>Clean</b>quotes, signatures, trackers</div>
+      <div class="node"><b>Classify</b>rules, then local model</div>
+    </div>
+    <div class="arrow">▼</div>
+    <div class="flow-row">
+      <div class="node soft"><b>Propose</b>tasks, memories, replies</div>
+      <div class="node soft"><b>Draft</b>local outbox</div>
+      <div class="node soft"><b>Approve</b>Desk or Telegram</div>
+      <div class="node soft"><b>Send</b>SMTP, audited</div>
+    </div>
+  </div>
+  <p class="table-note">F-2 — Email read-and-draft pipeline. Every stage after <em>Classify</em> produces a proposal, never an external write.</p>
+
+  <h4>Message handling rules</h4>
+  <ul>
+    <li>Newsletters, receipts, and automated notifications are classified by deterministic rules, not by the model, and are excluded from the must-reply queue.</li>
+    <li>Attachments are stored locally with a content hash and never sent to a cloud service. Only text extracted locally may inform a draft.</li>
+    <li>Quoted history is collapsed before model input to reduce tokens and accidental disclosure.</li>
+    <li>Drafts are stored as structured records — recipient, subject, body, in-reply-to, attachments — so a send is reproducible and auditable.</li>
+    <li>An approved send binds the exact draft hash. Editing the draft invalidates the approval.</li>
+  </ul>
+
+  <div class="callout warn">
+    <span class="label">Authentication caveat</span>
+    <p>Gmail app passwords remain supported but are a legacy path. If Google retires them for this account, the fallback is Gmail API OAuth with restricted scopes. In OAuth Testing mode, refresh tokens expire about every seven days, which is why IMAP is preferred for v1.0. The connector interface isolates this change to one adapter.</p>
+  </div>
+
+  <h3>7.3 Calendar — Google Calendar via private iCal</h3>
+  <p>The connector fetches the private iCal address for each selected calendar and parses it locally. It expands recurrence rules, resolves time zones, and builds a rolling window of events. It never writes to Google Calendar in v1.0.</p>
+  <table>
+    <thead><tr><th>Capability</th><th>v1.0</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Read events</td><td><span class="pill must">Yes</span></td><td>Private iCal URL, 60 days back and 180 forward.</td></tr>
+      <tr><td>Recurrence</td><td><span class="pill must">Yes</span></td><td>RRULE, EXDATE, and time-zone expansion in local code.</td></tr>
+      <tr><td>Free/busy search</td><td><span class="pill must">Yes</span></td><td>Computed from the local cache, respecting working hours.</td></tr>
+      <tr><td>Draft invite</td><td><span class="pill must">Yes</span></td><td>Generated <code>.ics</code> file the user can review and import.</td></tr>
+      <tr><td>Create or edit event</td><td><span class="pill never">No</span></td><td>Requires OAuth write scope; deferred.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>7.4 Telegram — control channel</h3>
+  <p>Telegram is the first channel because it is free, reliable on a phone, supports buttons and voice notes, and works with long polling so the local server never exposes a port. It is a control surface, not a data store.</p>
+  <table>
+    <thead><tr><th>Command</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td><code>/brief</code></td><td>Send today's brief now.</td></tr>
+      <tr><td><code>/tasks</code></td><td>List open tasks, grouped by status.</td></tr>
+      <tr><td><code>/task buy batteries tomorrow</code></td><td>Create a task with parsed due date and confirm.</td></tr>
+      <tr><td><code>/approve &lt;id&gt;</code> or button</td><td>Approve a pending action, subject to nonce and expiry.</td></tr>
+      <tr><td><code>/deny &lt;id&gt;</code> or button</td><td>Reject with an optional reason.</td></tr>
+      <tr><td><code>/mute 2h</code></td><td>Enter quiet hours immediately.</td></tr>
+      <tr><td><code>/status</code></td><td>Connector health, queue depth, model lane, last sync.</td></tr>
+    </tbody>
+  </table>
+  <h4>Channel rules</h4>
+  <ul>
+    <li>Only the allowlisted chat id is accepted. Unknown chats are ignored and logged, never answered.</li>
+    <li>Approval buttons carry a nonce, an expiry, and the payload hash. A button can be used once.</li>
+    <li>Messages contain counts, times, and summaries. Email bodies, attachments, calendar titles with attendees, and contact details stay in the Desk.</li>
+    <li>Rate limits, deduplication, and quiet hours apply to every outbound message.</li>
+    <li>Every outbound message is recorded in the audit log with its template id and approval id, if any.</li>
+  </ul>
+  <div class="callout plain">
+    <span class="label">Limits to state plainly</span>
+    <p>A Telegram bot cannot read personal chats it is not part of, cannot place a voice call, and cannot send SMS. Real calls and SMS require a telephony provider such as Twilio and are deferred. Voice notes are a later addition with local speech-to-text.</p>
+  </div>
+
+  <h3>7.5 Files and applications</h3>
+  <p>The file operator works only inside declared roots — by default <code>Downloads</code> and a staging folder. It produces a dry-run plan before any change, moves deletions to the Recycle Bin, and records every operation. The app operator launches allowlisted executables and can arrange windows; it never types into an application unless a specific, approved routine declares the target and the text.</p>
+
+  <h3>7.6 Browser</h3>
+  <p>Browser automation uses Playwright with a dedicated profile, an allowlist of domains, and a visible session. It is used for research and for forms that have no API. It may fill fields and prepare a submission, but a submit, purchase, booking, or upload requires approval. Banking, health, and payment domains are blocked at the policy layer, not by prompt instruction.</p>
+
+  <h3>7.7 Scripts</h3>
+  <p>A script is registered in a manifest with a name, path, argument schema, timeout, expected output, and risk class. Running it requires approval per run unless a scoped grant exists. The runner captures stdout and stderr, truncates secrets, and records the exit code. Arbitrary shell from model output is never executed.</p>
+
+  <h3>7.8 Capability matrix</h3>
+  <table>
+    <thead><tr><th>Connector</th><th class="tight">Read</th><th class="tight">Draft</th><th class="tight">Write</th><th class="tight">Delete</th><th>Approval required for</th></tr></thead>
+    <tbody>
+      <tr><td>Gmail IMAP</td><td class="tight">Yes</td><td class="tight">Local</td><td class="tight">Send</td><td class="tight">No</td><td>Any send; any recipient change</td></tr>
+      <tr><td>Google Calendar</td><td class="tight">Yes</td><td class="tight">.ics</td><td class="tight">No</td><td class="tight">No</td><td>Nothing in v1.0</td></tr>
+      <tr><td>Telegram</td><td class="tight">Commands</td><td class="tight">—</td><td class="tight">Messages</td><td class="tight">—</td><td>Outbound to anyone but the owner</td></tr>
+      <tr><td>Files</td><td class="tight">Yes</td><td class="tight">Plan</td><td class="tight">Move</td><td class="tight">Recycle</td><td>Any batch change</td></tr>
+      <tr><td>Browser</td><td class="tight">Yes</td><td class="tight">Fill</td><td class="tight">Submit</td><td class="tight">No</td><td>Submit, upload, purchase</td></tr>
+      <tr><td>Scripts</td><td class="tight">—</td><td class="tight">—</td><td class="tight">Run</td><td class="tight">—</td><td>Every run unless granted</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ================= 8. MEMORY ================= -->
+<div class="section">
+  <div class="brandline" style="margin-bottom:18px"><span>Section 8</span><span>Memory, life model, and Galaxy</span></div>
+  <h2 id="sec8"><span class="n">8</span>Memory, life model, and Galaxy</h2>
+  <p class="kicker">Notes are a source. The life model is the product. The Galaxy is how you see it.</p>
+
+  <h3>8.1 From notes to life model</h3>
+  <p>The current build treats markdown notes as the centre of retrieval. That inverts the real dependency. Notes are one input among many, and the test notes currently in the repository are not a foundation. The life model must be useful with zero notes.</p>
+  <table>
+    <thead><tr><th>Entity</th><th>Represents</th><th>Created by</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Memory</strong></td><td>A durable fact, preference, decision, or observation with provenance.</td><td>Explicit capture, confirmed proposal, import.</td></tr>
+      <tr><td><strong>Person</strong></td><td>Someone you correspond or work with; last contact, open commitments.</td><td>Email and calendar ingestion, manual entry.</td></tr>
+      <tr><td><strong>Project</strong></td><td>A body of work with a status, owner, and related items.</td><td>Manual, or promoted from repeated tasks.</td></tr>
+      <tr><td><strong>Task</strong></td><td>A unit of intended work with status, due date, and source.</td><td>Explicit request, confirmed extraction.</td></tr>
+      <tr><td><strong>Event</strong></td><td>A calendar item, deadline, or scheduled block.</td><td>Calendar connector, task due date.</td></tr>
+      <tr><td><strong>Source</strong></td><td>The email, message, note, document, or meeting an item came from.</td><td>Connectors.</td></tr>
+      <tr><td><strong>Connector</strong></td><td>A configured external system and its health.</td><td>Setup.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>8.2 Memory lifecycle</h3>
+  <ol>
+    <li><strong>Propose.</strong> A capture proposal is created with text, type, sensitivity, confidence, and at least one source reference.</li>
+    <li><strong>Confirm.</strong> The user accepts, edits, or rejects. An explicit "remember that…" may confirm immediately.</li>
+    <li><strong>Store.</strong> The memory is written with an immutable id, a timestamp, and a provenance edge.</li>
+    <li><strong>Retrieve.</strong> Hybrid search: keyword, recency, type filter, and graph proximity. Sensitivity filters apply before ranking.</li>
+    <li><strong>Supersede.</strong> A newer memory can replace an older one without deleting history. Both remain auditable.</li>
+    <li><strong>Forget.</strong> The user can forget a memory; its source link is removed and the audit records the action, not the content.</li>
+  </ol>
+
+  <div class="callout">
+    <span class="label">Capture posture</span>
+    <p>The assistant proposes; the user confirms. The only shortcut is an explicit instruction to remember, which is treated as confirmation. Nothing is learned silently from email.</p>
+  </div>
+
+  <h3>8.3 Galaxy as world-model explorer</h3>
+  <p>The Galaxy stops being a map of markdown files and becomes a map of what the assistant knows and owes. It is a sense-making tool, not a task board. Dense task work belongs in Home and the Desk.</p>
+  <table>
+    <thead><tr><th class="tight">Mode</th><th>Question it answers</th><th>Primary nodes</th></tr></thead>
+    <tbody>
+      <tr><td class="tight"><strong>Explore</strong></td><td>What do I know about this person or project?</td><td>Memory, Person, Project, Source</td></tr>
+      <tr><td class="tight"><strong>Today</strong></td><td>What is relevant right now?</td><td>Event, Task, open loop</td></tr>
+      <tr><td class="tight"><strong>Open loops</strong></td><td>What is waiting on me or someone else?</td><td>Task, commitment, thread</td></tr>
+      <tr><td class="tight"><strong>People</strong></td><td>Who do I owe, and who owes me?</td><td>Person, commitment</td></tr>
+      <tr><td class="tight"><strong>Provenance</strong></td><td>Why do you believe this?</td><td>Memory → Source</td></tr>
+      <tr><td class="tight"><strong>Recent</strong></td><td>What changed this week?</td><td>Capture, run, approval, connector</td></tr>
+    </tbody>
+  </table>
+
+  <h3>8.4 Graph contract</h3>
+  <pre><code>GET /world/graph?mode=today&depth=2
+
+{
+  "nodes": [
+    {"id": "mem_...", "type": "memory", "label": "...",
+     "sensitivity": "private", "weight": 0.8}
+  ],
+  "edges": [
+    {"from": "mem_...", "to": "per_...", "type": "about"}
+  ],
+  "meta": {"mode": "today", "truncated": false, "generated_at": "..."}
+}</code></pre>
+  <p>Edge types: <code>mentions</code>, <code>about</code>, <code>owns</code>, <code>works_with</code>, <code>due_on</code>, <code>part_of</code>, <code>replied_to</code>, <code>derived_from</code>, <code>blocked_by</code>, <code>promised_to</code>. The graph is generated at request time from SQLite, cached briefly, and bounded by node and edge limits so a large mailbox cannot freeze the view.</p>
+
+  <h3>8.5 Notes as an optional connector</h3>
+  <p>The markdown vault remains supported: <code>build.py</code> can still index notes, and useful notes can be promoted to document memories with a source edge. If the vault is deleted, nothing breaks. The Galaxy falls back to memories, people, projects, tasks, events, and connectors. This is a deliberate decoupling, not a migration deadline.</p>
+</div>
+
+<!-- ================= 9. TASKS ================= -->
+<div class="section">
+  <div class="brandline" style="margin-bottom:18px"><span>Section 9</span><span>Tasks and automation</span></div>
+  <h2 id="sec9"><span class="n">9</span>Tasks and automation</h2>
+  <p class="kicker">Tasks are the unit of accountability. Automation is a ladder, and each rung has a different authority.</p>
+
+  <h3>9.1 Task model</h3>
+  <table>
+    <thead><tr><th class="tight">Field</th><th>Type</th><th>Rules</th></tr></thead>
+    <tbody>
+      <tr><td class="tight"><code>id</code></td><td>string</td><td>Stable, prefixed <code>tsk_</code>.</td></tr>
+      <tr><td class="tight"><code>title</code></td><td>string</td><td>Imperative, under 120 characters, no trailing period.</td></tr>
+      <tr><td class="tight"><code>notes</code></td><td>text</td><td>Optional detail; may quote a source locally.</td></tr>
+      <tr><td class="tight"><code>status</code></td><td>enum</td><td><code>inbox</code>, <code>next</code>, <code>waiting</code>, <code>scheduled</code>, <code>done</code>, <code>cancelled</code>.</td></tr>
+      <tr><td class="tight"><code>priority</code></td><td>enum</td><td><code>low</code>, <code>normal</code>, <code>high</code>. No more than three high tasks per day.</td></tr>
+      <tr><td class="tight"><code>due_at</code>, <code>remind_at</code></td><td>datetime</td><td>Local time zone; reminders default to 09:00 on the due date.</td></tr>
+      <tr><td class="tight"><code>project</code>, <code>person</code></td><td>ref</td><td>Optional links to the life model.</td></tr>
+      <tr><td class="tight"><code>source</code>, <code>source_ref</code></td><td>ref</td><td>Required for extracted tasks; null for manual capture.</td></tr>
+      <tr><td class="tight"><code>estimate_min</code>, <code>energy</code></td><td>int, enum</td><td>Used by the planner to fit the day.</td></tr>
+      <tr><td class="tight"><code>recurrence</code></td><td>rule</td><td>Subset of RFC 5545; expanded locally.</td></tr>
+      <tr><td class="tight"><code>parent_id</code></td><td>ref</td><td>One level of subtasks, no deeper.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>9.2 Creation policy</h3>
+  <table>
+    <thead><tr><th>Source</th><th>Behaviour</th><th>Confirmation</th></tr></thead>
+    <tbody>
+      <tr><td>Explicit request — "remind me to…"</td><td>Create immediately.</td><td>One-line confirmation.</td></tr>
+      <tr><td>Email or message extraction</td><td>Create a proposal in the queue.</td><td>Required before it becomes a task.</td></tr>
+      <tr><td>Recurring routine</td><td>Create from a template.</td><td>Once, at template creation.</td></tr>
+      <tr><td>Brief suggestion</td><td>Propose up to three for tomorrow.</td><td>Required; accept all or individually.</td></tr>
+    </tbody>
+  </table>
+  <p>Deduplication uses a normalised title, the linked source, and a due-date window. If a similar open task exists, the assistant offers to update it instead of creating a second one.</p>
+
+  <h3>9.3 The autonomy ladder</h3>
+  <table>
+    <thead><tr><th class="tight">Level</th><th>Example</th><th>Authority</th><th class="tight">Approval</th></tr></thead>
+    <tbody>
+      <tr><td class="tight"><strong>0 · Remind</strong></td><td>"Renew insurance Friday."</td><td>Local task and notification.</td><td class="tight">None</td></tr>
+      <tr><td class="tight"><strong>1 · Draft</strong></td><td>"Draft a reply to Sarah."</td><td><code>DRAFT</code>; stored locally.</td><td class="tight">None</td></tr>
+      <tr><td class="tight"><strong>2 · Prepare</strong></td><td>"Find 30 minutes with Sarah."</td><td>Slots and <code>.ics</code> prepared.</td><td class="tight">None</td></tr>
+      <tr><td class="tight"><strong>3 · Act</strong></td><td>"Send it." "Archive these."</td><td><code>ACT</code> on the exact payload.</td><td class="tight">Per action</td></tr>
+      <tr><td class="tight"><strong>4 · Grant</strong></td><td>"Archive newsletters automatically."</td><td>Scoped, expiring, audited.</td><td class="tight">Once, at grant</td></tr>
+    </tbody>
+  </table>
+  <p class="table-note">T-1 — Autonomy ladder. v1.0 ships levels 0–3. Level 4 exists in the permission model but starts with no grants.</p>
+
+  <h3>9.4 Reminders and recurrence</h3>
+  <p>Reminders are generated locally and delivered through the active channel. Quiet hours suppress delivery until the next allowed window, except for a task explicitly marked urgent. Recurrence is expanded in code, not by the model, and completed instances are recorded so that a recurring task never double-fires.</p>
+
+  <h3>9.5 Daily brief</h3>
+  <p>The brief is a fixed template with variable content. It contains today's events with times, at most three must-dos, a waiting-on list, one item to ignore, and a single question. It is generated from structured data first; the local model only writes connective prose. If the model is unavailable, the brief still renders.</p>
+
+  <h3>9.6 What is never automated</h3>
+  <div class="cards">
+    <div class="card"><h4>Money</h4><p>No payments, transfers, purchases, or trading. Due-date reminders only.</p></div>
+    <div class="card"><h4>Health</h4><p>No medication, appointment, or medical-record actions. Reminders only, with no model involvement.</p></div>
+    <div class="card"><h4>Irreversible destruction</h4><p>Deletions go to the Recycle Bin. Permanent deletion requires a separate, explicit confirmation.</p></div>
+    <div class="card"><h4>Identity and access</h4><p>No password resets, account changes, or credential sharing.</p></div>
+  </div>
+
+  <div class="callout warn">
+    <span class="label">Automation test</span>
+    <p>Before adding an automation, answer: what is the worst outcome if it runs while I am asleep? If the answer involves money, health, a third party, or permanent data loss, it is not an automation — it is a proposal.</p>
+  </div>
+</div>
+
+<!-- ================= 10. SUBAGENTS ================= -->
+<div class="section">
+  <div class="brandline" style="margin-bottom:18px"><span>Section 10</span><span>Subagents and model lanes</span></div>
+  <h2 id="sec10"><span class="n">10</span>Subagents and model lanes</h2>
+  <p class="kicker">Six families answer six different questions. An agent is added only when a workflow repeats, and every agent runs inside the parent's authority.</p>
+
+  <h3>10.1 Families</h3>
+  <table>
+    <thead><tr><th class="tight">Family</th><th>Question</th><th class="tight">Ceiling</th><th>Output</th></tr></thead>
+    <tbody>
+      <tr><td class="tight"><strong>Perceive</strong></td><td>What is true right now?</td><td class="tight"><code>READ</code></td><td>Evidence, extracted facts, candidate tasks.</td></tr>
+      <tr><td class="tight"><strong>Plan</strong></td><td>What matters, in what order?</td><td class="tight"><code>READ</code>/<code>DRAFT</code></td><td>Plan, ranked list, risks, dependencies.</td></tr>
+      <tr><td class="tight"><strong>Produce</strong></td><td>What should we say or make?</td><td class="tight"><code>DRAFT</code></td><td>Draft, summary, invite, document.</td></tr>
+      <tr><td class="tight"><strong>Execute</strong></td><td>Do the approved thing.</td><td class="tight"><code>ACT</code></td><td>Action result and audit record.</td></tr>
+      <tr><td class="tight"><strong>Watch</strong></td><td>What changed, and what is next?</td><td class="tight"><code>READ</code></td><td>Alert, brief, proposal.</td></tr>
+      <tr><td class="tight"><strong>Govern</strong></td><td>Is this safe and correct?</td><td class="tight">System</td><td>Routing, veto, quality score.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>10.2 Roster</h3>
+  <table>
+    <thead><tr><th class="tight">Agent</th><th class="tight">Family</th><th class="tight">Permission</th><th class="tight">Lane</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td class="tight"><code>researcher</code></td><td class="tight">Perceive</td><td class="tight">READ</td><td class="tight"><span class="pill cloud">Either</span></td><td>Reads memory, documents, and the web; returns evidence, not opinion.</td></tr>
+      <tr><td class="tight"><code>inbox_triager</code></td><td class="tight">Perceive</td><td class="tight">READ</td><td class="tight"><span class="pill local">Local</span></td><td>Classifies threads; extracts asks, people, and dates.</td></tr>
+      <tr><td class="tight"><code>calendar_scout</code></td><td class="tight">Perceive</td><td class="tight">READ</td><td class="tight"><span class="pill local">Local</span></td><td>Finds free slots, conflicts, prep work, and travel gaps.</td></tr>
+      <tr><td class="tight"><code>document_reader</code></td><td class="tight">Perceive</td><td class="tight">READ</td><td class="tight"><span class="pill local">Local</span></td><td>Extracts obligations and dates from PDFs and attachments.</td></tr>
+      <tr><td class="tight"><code>contact_analyst</code></td><td class="tight">Perceive</td><td class="tight">READ</td><td class="tight"><span class="pill local">Local</span></td><td>Builds relationship context from mail and events.</td></tr>
+      <tr><td class="tight"><code>planner</code></td><td class="tight">Plan</td><td class="tight">READ</td><td class="tight"><span class="pill cloud">Either</span></td><td>Turns goals and constraints into a realistic day or week.</td></tr>
+      <tr><td class="tight"><code>critic</code></td><td class="tight">Plan</td><td class="tight">READ</td><td class="tight"><span class="pill cloud">Either</span></td><td>Checks plans and drafts for contradictions and risk.</td></tr>
+      <tr><td class="tight"><code>writer</code></td><td class="tight">Produce</td><td class="tight">DRAFT</td><td class="tight"><span class="pill local">Local</span></td><td>Drafts in the owner's voice; local for mail, cloud for public content.</td></tr>
+      <tr><td class="tight"><code>summarizer</code></td><td class="tight">Produce</td><td class="tight">DRAFT</td><td class="tight"><span class="pill cloud">Either</span></td><td>Condenses threads and meetings; local when content is private.</td></tr>
+      <tr><td class="tight"><code>scheduler</code></td><td class="tight">Produce</td><td class="tight">DRAFT</td><td class="tight"><span class="pill local">Local</span></td><td>Proposes times and drafts invites; never sends.</td></tr>
+      <tr><td class="tight"><code>mail_operator</code></td><td class="tight">Execute</td><td class="tight">ACT</td><td class="tight"><span class="pill local">Local</span></td><td>Sends or archives exactly the approved payload.</td></tr>
+      <tr><td class="tight"><code>calendar_operator</code></td><td class="tight">Execute</td><td class="tight">ACT</td><td class="tight"><span class="pill local">Local</span></td><td>Writes calendar changes when OAuth write exists; deferred.</td></tr>
+      <tr><td class="tight"><code>task_manager</code></td><td class="tight">Execute</td><td class="tight">ACT</td><td class="tight"><span class="pill local">Local</span></td><td>Creates and updates the local ledger.</td></tr>
+      <tr><td class="tight"><code>file_operator</code></td><td class="tight">Execute</td><td class="tight">ACT</td><td class="tight"><span class="pill local">Local</span></td><td>Runs approved batches inside allowlisted roots.</td></tr>
+      <tr><td class="tight"><code>browser_operator</code></td><td class="tight">Execute</td><td class="tight">ACT</td><td class="tight"><span class="pill cloud">Either</span></td><td>Allowlisted research and form preparation.</td></tr>
+      <tr><td class="tight"><code>notifier</code></td><td class="tight">Execute</td><td class="tight">ACT</td><td class="tight"><span class="pill local">Local</span></td><td>Delivers summaries to the owner; approval for anyone else.</td></tr>
+      <tr><td class="tight"><code>watchkeeper</code></td><td class="tight">Watch</td><td class="tight">READ</td><td class="tight"><span class="pill local">Local</span></td><td>Watches rules, deadlines, and anomalies; proposes only.</td></tr>
+      <tr><td class="tight"><code>followup_tracker</code></td><td class="tight">Watch</td><td class="tight">READ</td><td class="tight"><span class="pill local">Local</span></td><td>Tracks unanswered mail, promises, and stalled threads.</td></tr>
+      <tr><td class="tight"><code>briefing_agent</code></td><td class="tight">Watch</td><td class="tight">READ</td><td class="tight"><span class="pill local">Local</span></td><td>Builds morning, evening, and weekly briefs.</td></tr>
+      <tr><td class="tight"><code>router</code></td><td class="tight">Govern</td><td class="tight">System</td><td class="tight">Det.</td><td>Intent routing; the model is used only when ambiguous.</td></tr>
+      <tr><td class="tight"><code>policy_guard</code></td><td class="tight">Govern</td><td class="tight">System</td><td class="tight">Det.</td><td>Scope, grants, sensitivity, injection; may veto.</td></tr>
+      <tr><td class="tight"><code>evaluator</code></td><td class="tight">Govern</td><td class="tight">System</td><td class="tight"><span class="pill cloud">Either</span></td><td>Scores output quality and records metrics.</td></tr>
+    </tbody>
+  </table>
+  <p class="table-note">T-2 — Subagent roster. The core six are <code>researcher</code>, <code>inbox_triager</code>, <code>planner</code>, <code>writer</code>, <code>mail_operator</code>, and <code>watchkeeper</code>.</p>
+
+  <h3>10.3 Agent contract</h3>
+  <pre><code>AgentSpec
+  id, family, permission_ceiling, lane, tools[]
+  input_schema, output_schema
+  max_tokens, max_seconds, max_tool_calls
+  memory_policy: "read" | "propose" | "none"
+  escalation: return_to_orchestrator
+
+AgentResult
+  answer, evidence[], proposed_tasks[], proposed_memories[],
+  proposed_actions[], confidence, cost, limitations[]</code></pre>
+  <p>Agents return structured proposals. They do not send free-form handoffs to each other, and they cannot widen their own tool list. Effective permission is the intersection of the agent ceiling, the parent's authority, and the current turn's scope.</p>
+
+  <h3>10.4 Rules</h3>
+  <ul>
+    <li><strong>One orchestrator.</strong> It owns the conversation, the approval request, and the final answer. Subagents are workers.</li>
+    <li><strong>No irreversible action from a subagent.</strong> Execute agents act only on an approved payload supplied by the orchestrator.</li>
+    <li><strong>Depth limit 2.</strong> An agent may call one level of helper and no further.</li>
+    <li><strong>Budgets.</strong> Per-turn token, time, and tool-call caps. Exceeding a budget returns a partial result with a limitation note.</li>
+    <li><strong>Shared memory.</strong> Only the memory curator proposes new memories. Agents read; they do not write.</li>
+    <li><strong>Add on repetition.</strong> A new agent requires at least three repeated workflows, a distinct output schema, and a permission profile that differs from existing agents.</li>
+  </ul>
+
+  <h3>10.5 Model routing rules</h3>
+  <table>
+    <thead><tr><th>Task</th><th>Lane</th><th>Fallback</th></tr></thead>
+    <tbody>
+      <tr><td>Email classification and extraction</td><td>Local</td><td>Rules only; no cloud fallback.</td></tr>
+      <tr><td>Email draft</td><td>Local</td><td>Template draft; no cloud fallback.</td></tr>
+      <tr><td>Calendar summary</td><td>Local</td><td>Deterministic rendering.</td></tr>
+      <tr><td>General chat</td><td>Cloud</td><td>Local model with a quality warning.</td></tr>
+      <tr><td>Public web research</td><td>Cloud</td><td>Local model on extracted text.</td></tr>
+      <tr><td>Planning with private context</td><td>Local</td><td>Rule-based plan from tasks and events.</td></tr>
+      <tr><td>Secret-class content</td><td>None</td><td>Refusal with a manual path.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ================= 11. INTERFACES ================= -->
+<div class="section">
+  <div class="brandline" style="margin-bottom:18px"><span>Section 11</span><span>Interfaces and surfaces</span></div>
+  <h2 id="sec11"><span class="n">11</span>Interfaces and surfaces</h2>
+  <p class="kicker">Five surfaces, each with one job. If a screen tries to do two jobs, it belongs somewhere else.</p>
+
+  <h3>11.1 Home</h3>
+  <p>The default screen and the daily starting point. It shows the current brief, the <strong>Needs You</strong> queue, today's events, open tasks, and a capture bar. The queue is ordered by consequence and deadline, not by arrival time. Every item can be approved, snoozed, or opened in the Desk.</p>
+  <table>
+    <thead><tr><th>Region</th><th>Content</th><th>Actions</th></tr></thead>
+    <tbody>
+      <tr><td>Brief</td><td>Three must-dos, waiting-on, one thing to ignore.</td><td>Refresh, mute, open Desk.</td></tr>
+      <tr><td>Needs You</td><td>Pending approvals and proposals, with source and expiry.</td><td>Approve, reject, edit, snooze.</td></tr>
+      <tr><td>Today</td><td>Events and scheduled tasks on a single timeline.</td><td>Open event, draft prep, reschedule task.</td></tr>
+      <tr><td>Capture</td><td>One input for tasks and memories.</td><td>Create, confirm, undo.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>11.2 Desk</h3>
+  <p>The control hub for work in flight. It contains the run timeline, the approvals queue, the outbox, connector health, and the audit log. It is the only place where a user can see exactly what the assistant did, with what evidence, and under which approval.</p>
+  <ul>
+    <li><strong>Runs:</strong> every turn, its agents, tools, tokens, cost, duration, and result.</li>
+    <li><strong>Approvals:</strong> pending, approved, rejected, expired, revoked; payload preview and hash.</li>
+    <li><strong>Outbox:</strong> drafts with recipient, subject, body, and send state.</li>
+    <li><strong>Connectors:</strong> last sync, backlog, error, and a manual resync.</li>
+    <li><strong>Audit:</strong> filterable by actor, surface, tool, and date; export to JSON.</li>
+  </ul>
+
+  <h3>11.3 Brain</h3>
+  <p>The memory surface. It supports capture, review, search, and forgetting. Each memory shows its type, sensitivity, confidence, source, and the edges that connect it to people, projects, and tasks. Superseded memories remain visible behind a history toggle.</p>
+
+  <h3>11.4 Galaxy</h3>
+  <p>The world-model explorer described in Section 8. It opens in <em>Today</em> mode by default, with <em>Explore</em>, <em>Open loops</em>, <em>People</em>, <em>Provenance</em>, and <em>Recent</em> available. A node click opens a side panel with evidence and a link to the Desk. It is a read-only view; nothing is edited in the graph.</p>
+
+  <h3>11.5 Telegram</h3>
+  <p>The away-from-desk surface. It carries briefs, short answers, task capture, and approvals. It never carries full email bodies or attachments. Its keyboard is limited to actions that are safe to take from a phone.</p>
+
+  <h3>11.6 Surface rules</h3>
+  <table>
+    <thead><tr><th>Rule</th><th>Rationale</th></tr></thead>
+    <tbody>
+      <tr><td>Approval is always one tap away from the item.</td><td>Friction causes rubber-stamping; distance causes abandonment.</td></tr>
+      <tr><td>Every summary links to its evidence.</td><td>Trust requires inspectability.</td></tr>
+      <tr><td>No private body in a notification.</td><td>Lock screens and notification previews leak.</td></tr>
+      <tr><td>Destructive actions are visually distinct and never the default button.</td><td>Mis-taps should be harmless.</td></tr>
+      <tr><td>Empty states explain what to connect.</td><td>A blank Galaxy is an onboarding failure, not a design statement.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <span class="label">Design tone</span>
+    <p>Quiet, dense, and honest. No celebration animations for routine work, no anthropomorphic flattery, no fake urgency. The interface should feel like a good chief of staff: brief, prepared, and easy to correct.</p>
+  </div>
+</div>
+
+<!-- ================= 12. DATA MODEL ================= -->
+<div class="section">
+  <div class="brandline" style="margin-bottom:18px"><span>Section 12</span><span>Data model</span></div>
+  <h2 id="sec12"><span class="n">12</span>Data model</h2>
+  <p class="kicker">One SQLite database, explicit tables, no hidden state. Secrets never appear in a row.</p>
+
+  <h3>12.1 Tables</h3>
+  <table>
+    <thead><tr><th class="tight">Table</th><th>Key columns</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td class="tight"><code>sessions</code></td><td>id, surface, created_at, title</td><td>Conversation grouping across surfaces.</td></tr>
+      <tr><td class="tight"><code>messages</code></td><td>id, session_id, role, content, created_at</td><td>Turn history. Private content stays local.</td></tr>
+      <tr><td class="tight"><code>runs</code></td><td>id, session_id, intent, agents, tokens, cost, status, started_at</td><td>One orchestrated turn, for the Desk timeline.</td></tr>
+      <tr><td class="tight"><code>approvals</code></td><td>id, run_id, tool, payload_hash, payload, scope, status, expires_at</td><td>Immutable action proposals and decisions.</td></tr>
+      <tr><td class="tight"><code>audit_events</code></td><td>id, at, actor, surface, action, target, approval_id, meta</td><td>Append-only record. Metadata, never bodies.</td></tr>
+      <tr><td class="tight"><code>memories</code></td><td>id, type, text, sensitivity, confidence, source_id, superseded_by</td><td>Typed facts with provenance.</td></tr>
+      <tr><td class="tight"><code>memory_edges</code></td><td>from_id, to_id, type, weight</td><td>Graph relations between life-model entities.</td></tr>
+      <tr><td class="tight"><code>people</code></td><td>id, name, emails, last_contact_at, notes_ref</td><td>Relationship context.</td></tr>
+      <tr><td class="tight"><code>projects</code></td><td>id, name, status, owner, due_at</td><td>Grouping for tasks and sources.</td></tr>
+      <tr><td class="tight"><code>tasks</code></td><td>id, title, status, priority, due_at, project_id, person_id, source_id, recurrence</td><td>Local ledger.</td></tr>
+      <tr><td class="tight"><code>sources</code></td><td>id, kind, external_id, thread_id, subject, occurred_at, local_path</td><td>Email, message, note, document, meeting.</td></tr>
+      <tr><td class="tight"><code>events</code></td><td>id, source_id, start_at, end_at, title, location, attendees</td><td>Calendar cache and derived deadlines.</td></tr>
+      <tr><td class="tight"><code>drafts</code></td><td>id, source_id, to, subject, body, attachments, state, hash</td><td>Outbox. Body local; hash binds approval.</td></tr>
+      <tr><td class="tight"><code>grants</code></td><td>id, tool, scope, granted_at, expires_at, revoked_at</td><td>Scoped autonomy. Empty at v1.0 launch.</td></tr>
+      <tr><td class="tight"><code>connectors</code></td><td>id, kind, credential_ref, scopes, last_sync_at, status</td><td>Configuration and health.</td></tr>
+      <tr><td class="tight"><code>outbound</code></td><td>id, channel, template, approval_id, sent_at, status</td><td>Every message sent to the owner or others.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>12.2 Invariants</h3>
+  <ul>
+    <li>Every memory, task, and event has a <code>source_id</code> or an explicit <code>manual</code> marker.</li>
+    <li>Every approval references a run and a payload hash; an executed approval cannot be reused.</li>
+    <li>Audit rows are append-only. Updates are modelled as new events.</li>
+    <li>Credential columns store references only. A migration test asserts that no column name matches a secret pattern with a non-null value.</li>
+    <li>Deleting a source cascades to derived proposals but not to confirmed memories; those are marked <code>orphaned</code> and reviewed.</li>
+  </ul>
+
+  <h3>12.3 Example queries the model must support</h3>
+  <pre><code>-- Today's commitments, ordered by consequence
+SELECT t.title, t.due_at, p.name AS person
+FROM tasks t LEFT JOIN people p ON p.id = t.person_id
+WHERE t.status IN ('next','scheduled') AND date(t.due_at) <= date('now','localtime')
+ORDER BY t.priority DESC, t.due_at ASC LIMIT 20;
+
+-- Open loops for a person
+SELECT m.text, m.created_at
+FROM memories m JOIN memory_edges e ON e.from_id = m.id
+WHERE e.to_id = ? AND e.type = 'promised_to' AND m.superseded_by IS NULL;</code></pre>
+</div>
+
+<!-- ================= 13. FUNCTIONAL REQUIREMENTS ================= -->
+<div class="section">
+  <div class="brandline" style="margin-bottom:18px"><span>Section 13</span><span>Functional requirements</span></div>
+  <h2 id="sec13"><span class="n">13</span>Functional requirements</h2>
+  <p class="kicker">Each requirement is testable and has one owner area. Priority follows Section 3.1.</p>
+
+  <h3>13.1 Privacy and policy</h3>
+  <table>
+    <thead><tr><th class="tight">ID</th><th>Requirement</th><th class="tight">Priority</th></tr></thead>
+    <tbody>
+      <tr><td class="tight">FR-P1</td><td>Every ingested record receives a sensitivity class and inherits it to all derived records.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-P2</td><td>The model router blocks private and sensitive content from any cloud provider, including retries and fallbacks.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-P3</td><td>Secret-class content is never sent to a model and never automated; the user receives a clear refusal and a manual path.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-P4</td><td>Credentials are stored in Windows Credential Manager; the database and logs contain references only.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-P5</td><td>Untrusted content is enveloped and scanned for directive patterns before model input.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-P6</td><td>Every cloud model call records its reason and the sensitivity class of its payload.</td><td class="tight"><span class="pill should">Should</span></td></tr>
+      <tr><td class="tight">FR-P7</td><td>A purge command removes cached mail, calendar, and attachment data within one minute.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>13.2 Email</h3>
+  <table>
+    <thead><tr><th class="tight">ID</th><th>Requirement</th><th class="tight">Priority</th></tr></thead>
+    <tbody>
+      <tr><td class="tight">FR-E1</td><td>Connect to Gmail over IMAP using a credential-vault app password, with a visible connection test.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-E2</td><td>Fetch new mail incrementally using UID cursors and <code>BODY.PEEK</code>, without changing read state.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-E3</td><td>Reconstruct threads from message ids and references, and collapse quoted history.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-E4</td><td>Classify each thread as reply needed, waiting, informational, or ignore, with a confidence score.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-E5</td><td>Extract asks, people, and dates, and propose tasks and memories for confirmation.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-E6</td><td>Draft replies in the owner's voice and store them in the local outbox with a content hash.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-E7</td><td>Send an approved draft over SMTP exactly once, with the approved hash and recipient list.</td><td class="tight"><span class="pill should">Should</span></td></tr>
+      <tr><td class="tight">FR-E8</td><td>Never mark, move, label, or delete mail in v1.0.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-E9</td><td>Show attachment metadata locally and never upload attachments to a channel or cloud model.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>13.3 Calendar</h3>
+  <table>
+    <thead><tr><th class="tight">ID</th><th>Requirement</th><th class="tight">Priority</th></tr></thead>
+    <tbody>
+      <tr><td class="tight">FR-C1</td><td>Fetch and parse one or more private iCal URLs, with per-calendar health status.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-C2</td><td>Expand recurrence rules and time zones locally, including exceptions.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-C3</td><td>Detect conflicts and propose free slots within configured working hours.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-C4</td><td>Generate a valid <code>.ics</code> invite draft for review; never create an event directly.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-C5</td><td>Include calendar titles and attendees in local surfaces only, never in Telegram messages.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>13.4 Tasks</h3>
+  <table>
+    <thead><tr><th class="tight">ID</th><th>Requirement</th><th class="tight">Priority</th></tr></thead>
+    <tbody>
+      <tr><td class="tight">FR-T1</td><td>Create, edit, complete, cancel, and reopen tasks with the fields in Section 9.1.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-T2</td><td>Parse natural-language due dates and times in the local time zone, asking one question when ambiguous.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-T3</td><td>Create explicit "remind me" tasks immediately with a one-line confirmation.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-T4</td><td>Propose extracted tasks and require confirmation before they enter the ledger.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-T5</td><td>Deduplicate by normalised title, source, and due window, offering an update instead of a duplicate.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-T6</td><td>Support recurrence with local expansion and no double-firing of completed instances.</td><td class="tight"><span class="pill should">Should</span></td></tr>
+      <tr><td class="tight">FR-T7</td><td>Deliver reminders through the active channel, respecting quiet hours except for urgent tasks.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>13.5 Briefs and follow-ups</h3>
+  <table>
+    <thead><tr><th class="tight">ID</th><th>Requirement</th><th class="tight">Priority</th></tr></thead>
+    <tbody>
+      <tr><td class="tight">FR-B1</td><td>Generate a morning brief from structured data, with at most three must-dos and one thing to ignore.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-B2</td><td>Render the brief without a model; the model may only add connective prose.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-B3</td><td>Detect unanswered sent mail older than a configurable threshold and add it to waiting-on.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-B4</td><td>Produce an evening brief and a weekly review with completions, slippage, and open loops.</td><td class="tight"><span class="pill should">Should</span></td></tr>
+      <tr><td class="tight">FR-B5</td><td>Suppress duplicate briefs and respect quiet hours and mute commands.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ================= 13 cont. ================= -->
+<div class="section">
+  <div class="brandline" style="margin-bottom:18px"><span>Section 13</span><span>Functional requirements, continued</span></div>
+
+  <h3>13.6 Telegram channel</h3>
+  <table>
+    <thead><tr><th class="tight">ID</th><th>Requirement</th><th class="tight">Priority</th></tr></thead>
+    <tbody>
+      <tr><td class="tight">FR-G1</td><td>Connect a bot via long polling and accept messages only from the allowlisted chat id.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-G2</td><td>Support <code>/brief</code>, <code>/tasks</code>, <code>/task</code>, <code>/approve</code>, <code>/deny</code>, <code>/mute</code>, and <code>/status</code>.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-G3</td><td>Render approvals as inline buttons bound to a nonce, expiry, and payload hash, usable once.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-G4</td><td>Send summaries only: no email bodies, attachments, attendee lists, or contact details.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-G5</td><td>Apply quiet hours, rate limits, and deduplication to every outbound message.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-G6</td><td>Record every outbound message with template, approval id, and delivery status.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-G7</td><td>Accept voice notes and transcribe locally. Deferred to the voice milestone.</td><td class="tight"><span class="pill could">Could</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>13.7 Desk and approvals</h3>
+  <table>
+    <thead><tr><th class="tight">ID</th><th>Requirement</th><th class="tight">Priority</th></tr></thead>
+    <tbody>
+      <tr><td class="tight">FR-D1</td><td>Show a run timeline with agents, tools, tokens, cost, duration, and outcome.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-D2</td><td>Show a pending approvals queue with payload preview, scope, source, and expiry.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-D3</td><td>Approve, reject, revoke, and edit a proposal; an edit returns it to proposed.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-D4</td><td>Show the outbox with draft state, recipient count, and send result.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-D5</td><td>Show connector health, backlog, and a manual resync.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-D6</td><td>Provide a filterable audit log and JSON export.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-D7</td><td>Reject expired, replayed, or hash-mismatched approvals with a visible reason.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>13.8 Memory and Brain</h3>
+  <table>
+    <thead><tr><th class="tight">ID</th><th>Requirement</th><th class="tight">Priority</th></tr></thead>
+    <tbody>
+      <tr><td class="tight">FR-M1</td><td>Capture memories with type, text, sensitivity, confidence, and at least one source.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-M2</td><td>Propose captures and require confirmation, except for an explicit "remember that…".</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-M3</td><td>Retrieve with keyword, recency, type, and graph proximity, filtered by sensitivity first.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-M4</td><td>Supersede without deleting; show history on demand.</td><td class="tight"><span class="pill should">Should</span></td></tr>
+      <tr><td class="tight">FR-M5</td><td>Forget a memory and remove its source edge, recording the action without content.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-M6</td><td>Operate with zero notes and zero connectors, showing an onboarding state instead of an error.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>13.9 Galaxy</h3>
+  <table>
+    <thead><tr><th class="tight">ID</th><th>Requirement</th><th class="tight">Priority</th></tr></thead>
+    <tbody>
+      <tr><td class="tight">FR-X1</td><td>Serve a runtime graph from memories, people, projects, tasks, events, sources, and connectors.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-X2</td><td>Support Explore, Today, Open loops, People, Provenance, and Recent modes.</td><td class="tight"><span class="pill should">Should</span></td></tr>
+      <tr><td class="tight">FR-X3</td><td>Open a side panel with evidence and a link to the Desk on node click.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-X4</td><td>Bound node and edge counts, cache briefly, and remain responsive at 2,000 nodes.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-X5</td><td>Keep the optional notes mode working when the vault exists.</td><td class="tight"><span class="pill could">Could</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>13.10 Files, apps, browser, and scripts</h3>
+  <table>
+    <thead><tr><th class="tight">ID</th><th>Requirement</th><th class="tight">Priority</th></tr></thead>
+    <tbody>
+      <tr><td class="tight">FR-F1</td><td>Operate only inside declared roots and refuse paths outside them, including via symlinks.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-F2</td><td>Produce a dry-run plan with counts and sizes before any batch change.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-F3</td><td>Move deletions to the Recycle Bin and record every operation.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-F4</td><td>Launch allowlisted applications and save an arrangement as a named routine.</td><td class="tight"><span class="pill should">Should</span></td></tr>
+      <tr><td class="tight">FR-F5</td><td>Use a dedicated browser profile with a domain allowlist and block payment, banking, and health domains.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-F6</td><td>Require approval before submit, upload, booking, or purchase in a browser session.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-F7</td><td>Run only manifested scripts with typed arguments, a timeout, and captured output.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-F8</td><td>Never execute arbitrary shell produced by a model.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>13.11 Agents and routing</h3>
+  <table>
+    <thead><tr><th class="tight">ID</th><th>Requirement</th><th class="tight">Priority</th></tr></thead>
+    <tbody>
+      <tr><td class="tight">FR-A1</td><td>Ship the core six agents with the ceilings and lanes in Section 10.2.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-A2</td><td>Intersect agent permission with parent authority and turn scope on every call.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-A3</td><td>Enforce depth limit 2 and per-turn token, time, and tool budgets.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-A4</td><td>Validate agent output against a schema; reject and report malformed proposals.</td><td class="tight"><span class="pill must">Must</span></td></tr>
+      <tr><td class="tight">FR-A5</td><td>Route deterministically where intent is clear; use a model only when ambiguous.</td><td class="tight"><span class="pill should">Should</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ================= 14. NFR ================= -->
+<div class="section">
+  <div class="brandline" style="margin-bottom:18px"><span>Section 14</span><span>Non-functional requirements</span></div>
+  <h2 id="sec14"><span class="n">14</span>Non-functional requirements</h2>
+  <p class="kicker">The qualities that decide whether the assistant is trusted after the novelty wears off.</p>
+
+  <h3>14.1 Performance</h3>
+  <table>
+    <thead><tr><th>Metric</th><th>Target</th><th>Measurement</th></tr></thead>
+    <tbody>
+      <tr><td>Home first render</td><td>Under 1.2 s warm, under 3 s cold</td><td>Local Chrome, no network</td></tr>
+      <tr><td>Brief generation</td><td>Under 2 s without model; under 8 s with local model</td><td>Structured data path</td></tr>
+      <tr><td>Email incremental sync</td><td>Under 10 s for 50 new messages</td><td>IMAP fetch plus parse</td></tr>
+      <tr><td>Local draft, 150 words</td><td>Under 12 s on the RTX 3050</td><td>Ollama, 3B–4B Q4</td></tr>
+      <tr><td>Galaxy at 2,000 nodes</td><td>60 fps pan, under 2 s load</td><td>DevTools performance trace</td></tr>
+      <tr><td>Approval round trip</td><td>Under 2 s from tap to audit row</td><td>Telegram callback</td></tr>
+    </tbody>
+  </table>
+
+  <h3>14.2 Reliability</h3>
+  <ul>
+    <li>The assistant starts and serves Home, Brain, tasks, and memory with no provider key, no Ollama, and no network.</li>
+    <li>Connector failures are isolated: one broken connector must not block the brief or the task ledger.</li>
+    <li>Every write is transactional. A failed send leaves the draft in <em>failed</em>, not <em>sent</em>.</li>
+    <li>Crash recovery resumes from the last committed cursor; no duplicate tasks or messages on restart.</li>
+    <li>A nightly backup copies the database and configuration to a local folder, excluding secrets.</li>
+  </ul>
+
+  <h3>14.3 Security</h3>
+  <ul>
+    <li>Server binds to <code>127.0.0.1</code> only. No CORS wildcard. No served path can reach <code>config.json</code>, <code>data/</code>, or the vault.</li>
+    <li>All external input is schema-validated and size-limited. Path traversal and symlink escape are rejected.</li>
+    <li>Approval payloads are immutable and hash-bound. Nonces are single-use and expire.</li>
+    <li>Logs redact secrets by key and pattern; a test asserts no credential value appears in any log line.</li>
+    <li>Dependency updates are pinned and reviewed; no post-install scripts from untrusted packages.</li>
+  </ul>
+
+  <h3>14.4 Usability</h3>
+  <ul>
+    <li>The daily loop — read brief, work queue, capture, close day — is completable without a manual.</li>
+    <li>Every error states what failed, what was preserved, and the next action.</li>
+    <li>Keyboard-first on desktop; every primary action reachable without a mouse.</li>
+    <li>No modal chains. No more than one decision per screen region.</li>
+    <li>Contrast meets WCAG AA; the UI remains legible at 125% scaling.</li>
+  </ul>
+
+  <h3>14.5 Maintainability</h3>
+  <ul>
+    <li>Typed Python with <code>ruff</code> and <code>mypy</code> in CI; tests for every connector and policy rule.</li>
+    <li>Connector and channel adapters are replaceable without touching the orchestrator.</li>
+    <li>Schema migrations are versioned, forward-only, and tested against a copy of real data shapes.</li>
+    <li>No feature depends on the test notes in <code>notes/</code>.</li>
+  </ul>
+
+  <h3>14.6 Accessibility and tone</h3>
+  <p>The assistant speaks plainly, admits uncertainty, and never flatters. It uses short sentences, avoids exclamation marks in system messages, and states limitations before offering workarounds. Screen-reader labels are required on all controls, and the Galaxy has a list-view equivalent.</p>
+
+  <div class="callout plain">
+    <span class="label">Definition of done</span>
+    <p>A requirement is done when it has a test, a visible surface, an audit event where relevant, and a line in the operator documentation. Code alone is not done.</p>
+  </div>
+</div>
+
+<!-- ================= 15. ROADMAP ================= -->
+<div class="section">
+  <div class="brandline" style="margin-bottom:18px"><span>Section 15</span><span>Roadmap and milestones</span></div>
+  <h2 id="sec15"><span class="n">15</span>Roadmap and milestones</h2>
+  <p class="kicker">Six milestones, each independently useful, each ending with something the owner can actually use that week.</p>
+
+  <h3>15.1 Milestone plan</h3>
+  <table>
+    <thead><tr><th class="tight">Milestone</th><th>Phases</th><th>Outcome</th><th class="tight">Depends on</th></tr></thead>
+    <tbody>
+      <tr><td class="tight"><strong>M1</strong><br>Privacy + data</td><td>2E.0 connector foundation<br>2M local model and router<br>2E.1 email read<br>2E.2 calendar read</td><td>Real mail and calendar data, ingested and processed entirely locally, with a visible privacy lane.</td><td class="tight">v0.7.1</td></tr>
+      <tr><td class="tight"><strong>M2</strong><br>Control + contact</td><td>2D Desk<br>2J Telegram channel</td><td>Runs, approvals, audit, and phone control. The owner can see and steer the system.</td><td class="tight">M1</td></tr>
+      <tr><td class="tight"><strong>M3</strong><br>Draft + act</td><td>2F outbox<br>2G actions and grants</td><td>Drafts, approved sends, and scoped automation with a clean audit trail.</td><td class="tight">M2</td></tr>
+      <tr><td class="tight"><strong>M4</strong><br>Proactive + tasks</td><td>2H briefs and scheduler<br>2K task ledger and follow-ups</td><td>Morning brief, reminders, waiting-on tracking, and a daily plan that reflects reality.</td><td class="tight">M3</td></tr>
+      <tr><td class="tight"><strong>M5</strong><br>Automation</td><td>3D files and apps<br>3E browser tasks<br>3F scripts</td><td>Downloads cleaned, routines run, forms prepared, research gathered — all with approval.</td><td class="tight">M4</td></tr>
+      <tr><td class="tight"><strong>M6</strong><br>Product</td><td>3G voice<br>3H packaging and onboarding<br>3I hardening and v1.0</td><td>A daily-usable, installable v1.0 with backup, recovery, and documentation.</td><td class="tight">M5</td></tr>
+    </tbody>
+  </table>
+  <p class="table-note">T-3 — Milestone plan. Phase numbers align with the implementation plan; the task ledger moves earlier than originally planned because briefs depend on it.</p>
+
+  <h3>15.2 Phase detail and exit criteria</h3>
+  <table>
+    <thead><tr><th class="tight">Phase</th><th class="tight">Branch</th><th>Exit criteria</th></tr></thead>
+    <tbody>
+      <tr><td class="tight">2E.0</td><td class="tight"><code>phase-2e0-connector-foundation</code></td><td>Connector interface, registry, health, capability enforcement, fixtures, and tests. No credentials required.</td></tr>
+      <tr><td class="tight">2M</td><td class="tight"><code>phase-2m-local-model-router</code></td><td>Ollama adapter, lane routing, refusal path, and tests proving private content cannot reach cloud.</td></tr>
+      <tr><td class="tight">2E.1</td><td class="tight"><code>phase-2e1-email-read</code></td><td>IMAP sync, thread reconstruction, local classification, proposal queue. Read-only verified by test.</td></tr>
+      <tr><td class="tight">2E.2</td><td class="tight"><code>phase-2e2-calendar-read</code></td><td>iCal ingestion, recurrence expansion, conflict detection, free-slot search.</td></tr>
+      <tr><td class="tight">2D</td><td class="tight"><code>phase-2d-desk</code></td><td>Runs, approvals, outbox, connectors, and audit in one surface.</td></tr>
+      <tr><td class="tight">2J</td><td class="tight"><code>phase-2j-telegram</code></td><td>Allowlisted bot, commands, briefs, approval buttons, quiet hours, outbound audit.</td></tr>
+      <tr><td class="tight">2F</td><td class="tight"><code>phase-2f-outbox</code></td><td>Draft CRUD, hash binding, edit invalidation, send-once semantics.</td></tr>
+      <tr><td class="tight">2G</td><td class="tight"><code>phase-2g-actions-grants</code></td><td>Approved execution, grant model, revocation, and audit completeness.</td></tr>
+      <tr><td class="tight">2H</td><td class="tight"><code>phase-2h-briefs</code></td><td>Morning, evening, and weekly briefs; follow-up detection; quiet hours.</td></tr>
+      <tr><td class="tight">2K</td><td class="tight"><code>phase-2k-tasks</code></td><td>Ledger, natural-language dates, recurrence, dedupe, reminders, Home integration.</td></tr>
+      <tr><td class="tight">3D</td><td class="tight"><code>phase-3d-os-automation</code></td><td>Allowlisted roots, dry-run plans, Recycle Bin deletes, app routines, manifests.</td></tr>
+      <tr><td class="tight">3E</td><td class="tight"><code>phase-3e-browser</code></td><td>Playwright profile, domain allowlist, research capture, form preparation, submit approval.</td></tr>
+      <tr><td class="tight">3F</td><td class="tight"><code>phase-3f-scripts</code></td><td>Script manifest, typed args, timeouts, output capture, per-run approval.</td></tr>
+      <tr><td class="tight">3G</td><td class="tight"><code>phase-3g-voice</code></td><td>Local STT and TTS, voice notes over Telegram, push-to-talk in the UI.</td></tr>
+      <tr><td class="tight">3H</td><td class="tight"><code>phase-3h-packaging</code></td><td>Installer, first-run onboarding, backup and restore, diagnostics bundle.</td></tr>
+      <tr><td class="tight">3I</td><td class="tight"><code>phase-3i-hardening</code></td><td>Threat-model review, performance pass, accessibility pass, v1.0 tag.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>15.3 Working method</h3>
+  <ul>
+    <li>Each phase is a descriptively named branch, reviewed as a PR, squash-merged, then the branch is deleted and the repository returns to <code>main</code>.</li>
+    <li>Work stops after a PR is opened unless the owner explicitly asks to continue.</li>
+    <li>Every phase ends with tests, documentation, and a short note in the implementation plan.</li>
+    <li>No phase may depend on a credential to be reviewable; fixtures and mocks are required.</li>
+  </ul>
+
+  <h3>15.4 Critical path</h3>
+  <p>The critical path is <strong>2E.0 → 2M → 2E.1 → 2D → 2J → 2K → 2H</strong>. That sequence produces the daily loop: read mail locally, see approvals, approve from the phone, capture tasks, receive a brief. Everything else improves quality of life around that loop.</p>
+</div>
+
+<!-- ================= 16. RISKS ================= -->
+<div class="section">
+  <div class="brandline" style="margin-bottom:18px"><span>Section 16</span><span>Risks and mitigations</span></div>
+  <h2 id="sec16"><span class="n">16</span>Risks and mitigations</h2>
+  <p class="kicker">The risks that could make the product useless, unsafe, or abandoned — and the decision that reduces each one.</p>
+
+  <table>
+    <thead><tr><th class="tight">#</th><th>Risk</th><th class="tight">Likelihood</th><th class="tight">Impact</th><th>Mitigation</th></tr></thead>
+    <tbody>
+      <tr><td class="tight">R1</td><td>Google retires app passwords for this account, breaking IMAP.</td><td class="tight">Medium</td><td class="tight">High</td><td>Connector interface isolates auth; Gmail API OAuth adapter is the fallback; document the seven-day Testing-mode limitation.</td></tr>
+      <tr><td class="tight">R2</td><td>The 3B–4B local model is too weak for useful drafts.</td><td class="tight">Medium</td><td class="tight">Medium</td><td>Deterministic templates, structured outputs, retrieval of past sent mail as style examples, and an easy path to a 7B model with CPU offload.</td></tr>
+      <tr><td class="tight">R3</td><td>Approval friction causes rubber-stamping or abandonment.</td><td class="tight">High</td><td class="tight">High</td><td>Batch approvals, clear consequence summaries, one-tap from Telegram, and grants only after a workflow proves stable.</td></tr>
+      <tr><td class="tight">R4</td><td>Prompt injection through email or web content.</td><td class="tight">Medium</td><td class="tight">High</td><td>Untrusted envelope, deterministic tools, no auto-fetch, no model-selected recipients, approval on every write.</td></tr>
+      <tr><td class="tight">R5</td><td>Private content leaks to the cloud through a fallback path.</td><td class="tight">Low</td><td class="tight">Critical</td><td>Lane enforcement in the router, not in prompts; tests that assert refusal; no cloud fallback on local failure.</td></tr>
+      <tr><td class="tight">R6</td><td>The private iCal URL is rotated or leaked.</td><td class="tight">Medium</td><td class="tight">Medium</td><td>Credential vault storage, health check with a clear error, one-command rotation, and no URL in logs.</td></tr>
+      <tr><td class="tight">R7</td><td>Scope creep turns v1.0 into an unfinished platform.</td><td class="tight">High</td><td class="tight">High</td><td>Section 3 boundary, milestone exits, and a rule that new agents or connectors need three repeated workflows.</td></tr>
+      <tr><td class="tight">R8</td><td>Browser and OS automation is fragile across app updates.</td><td class="tight">High</td><td class="tight">Medium</td><td>Prefer structured APIs; allowlisted domains and executables; dry runs; fail visibly rather than improvise.</td></tr>
+      <tr><td class="tight">R9</td><td>Mailbox size makes local sync and storage expensive.</td><td class="tight">Medium</td><td class="tight">Medium</td><td>Incremental sync, 90-day retention, attachment-on-demand, and a hard cache size cap with eviction.</td></tr>
+      <tr><td class="tight">R10</td><td>Laptop thermals throttle local inference.</td><td class="tight">Medium</td><td class="tight">Low</td><td>Small model, short contexts, batch jobs on AC power, and a visible latency budget.</td></tr>
+      <tr><td class="tight">R11</td><td>The Galaxy becomes decorative and unused.</td><td class="tight">Medium</td><td class="tight">Low</td><td>Default to Today mode, tie nodes to real open loops, and measure weekly use; remove it if it does not earn its place.</td></tr>
+      <tr><td class="tight">R12</td><td>Telegram is unavailable or blocked.</td><td class="tight">Low</td><td class="tight">Medium</td><td>Desktop notifications remain a first-class channel; the channel interface allows a second adapter.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>16.1 Risk review cadence</h3>
+  <p>Risks are reviewed at each milestone exit. A risk that has not changed in two milestones is either accepted in writing or removed. A new critical risk pauses feature work until it has a mitigation.</p>
+
+  <div class="callout danger">
+    <span class="label">Stop conditions</span>
+    <p>Stop and reassess if any of these occur: private content reaches a cloud provider; an external write executes without an approval record; a connector silently changes read state; or the daily loop takes longer than the manual alternative for two consecutive weeks.</p>
+  </div>
+</div>
+
+<!-- ================= 17. ACCEPTANCE ================= -->
+<div class="section">
+  <div class="brandline" style="margin-bottom:18px"><span>Section 17</span><span>Acceptance and metrics</span></div>
+  <h2 id="sec17"><span class="n">17</span>Acceptance criteria and metrics</h2>
+  <p class="kicker">v1.0 is accepted when the owner can live a normal day inside it, and the system proves it kept its promises.</p>
+
+  <h3>17.1 Scenario acceptance</h3>
+  <table>
+    <thead><tr><th class="tight">#</th><th>Scenario</th><th>Pass condition</th></tr></thead>
+    <tbody>
+      <tr><td class="tight">A1</td><td>Cold start with no credentials</td><td>Home, Brain, tasks, and memory load; onboarding explains what to connect; no error dialogs.</td></tr>
+      <tr><td class="tight">A2</td><td>Connect Gmail and sync</td><td>Messages appear locally; read state is unchanged in Gmail; sync completes under the performance target.</td></tr>
+      <tr><td class="tight">A3</td><td>Triage a real thread</td><td>A reply is proposed with extracted ask, person, and date; the task requires confirmation.</td></tr>
+      <tr><td class="tight">A4</td><td>Draft and approve from Telegram</td><td>Draft is created locally; approval from the phone sends once; the audit row links draft hash and approval id.</td></tr>
+      <tr><td class="tight">A5</td><td>Replay an approval</td><td>The second tap is rejected, the user sees why, and the audit records the attempt.</td></tr>
+      <tr><td class="tight">A6</td><td>Capture a promise</td><td>One line creates the task with person and due date; a single confirmation is shown; no duplicate exists.</td></tr>
+      <tr><td class="tight">A7</td><td>Morning brief</td><td>Brief renders with no model and with the model; both versions list events, three must-dos, waiting-on, and one ignore.</td></tr>
+      <tr><td class="tight">A8</td><td>Find a meeting slot</td><td>Three conflict-free slots and an <code>.ics</code> draft are produced; no event is created remotely.</td></tr>
+      <tr><td class="tight">A9</td><td>Private content with cloud selected</td><td>The router refuses the cloud lane and completes locally, or explains the limit. No request is sent.</td></tr>
+      <tr><td class="tight">A10</td><td>Injection attempt in email</td><td>The directive is surfaced as untrusted, no tool is called, and the user sees a warning.</td></tr>
+      <tr><td class="tight">A11</td><td>Clean Downloads</td><td>A dry-run plan is shown; approval executes once; deletions land in the Recycle Bin; every operation is audited.</td></tr>
+      <tr><td class="tight">A12</td><td>Delete the notes vault</td><td>The Galaxy still renders from the life model; nothing errors; the optional notes mode is simply absent.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>17.2 Product metrics</h3>
+  <table>
+    <thead><tr><th>Metric</th><th>Definition</th><th class="tight">Target at 30 days</th></tr></thead>
+    <tbody>
+      <tr><td>Daily loop completion</td><td>Days with a brief opened and at least one queue item resolved.</td><td class="tight">≥ 20 of 30</td></tr>
+      <tr><td>Time to orientation</td><td>Time from opening Home to first action.</td><td class="tight">Under 60 s</td></tr>
+      <tr><td>Proposal precision</td><td>Extracted tasks accepted without edit.</td><td class="tight">≥ 70%</td></tr>
+      <tr><td>Draft acceptance</td><td>Drafts sent with only minor edits.</td><td class="tight">≥ 50%</td></tr>
+      <tr><td>Approval latency</td><td>Median time from request to decision.</td><td class="tight">Under 10 min in waking hours</td></tr>
+      <tr><td>Unapproved writes</td><td>External writes without a matching approval.</td><td class="tight">0</td></tr>
+      <tr><td>Private egress</td><td>Private or sensitive payloads sent to a cloud provider.</td><td class="tight">0</td></tr>
+      <tr><td>Brief reliability</td><td>Days the brief was delivered on time.</td><td class="tight">≥ 95%</td></tr>
+      <tr><td>Open-loop age</td><td>Median age of waiting-on items.</td><td class="tight">Under 5 days</td></tr>
+    </tbody>
+  </table>
+
+  <h3>17.3 Quality gates</h3>
+  <ul>
+    <li>All tests pass on Windows 11 with Python 3.14 and no network access for the offline suite.</li>
+    <li>No high-severity finding in the dependency audit; no secret in the repository history.</li>
+    <li>Every new endpoint has validation tests and a documented error shape.</li>
+    <li>Every new tool has a permission test proving it cannot exceed its tier.</li>
+    <li>Manual pass of scenarios A1–A12 on a clean profile before the v1.0 tag.</li>
+  </ul>
+</div>
+
+<!-- ================= 18. DECISIONS ================= -->
+<div class="section">
+  <div class="brandline" style="margin-bottom:18px"><span>Section 18</span><span>Decisions and open questions</span></div>
+  <h2 id="sec18"><span class="n">18</span>Decisions log and open questions</h2>
+  <p class="kicker">The decisions that shape the build, with the reason they were made — and the questions still worth asking.</p>
+
+  <h3>18.1 Decisions</h3>
+  <table>
+    <thead><tr><th class="tight">#</th><th>Decision</th><th>Rationale</th><th class="tight">Revisit</th></tr></thead>
+    <tbody>
+      <tr><td class="tight">D1</td><td>Gmail personal via IMAP and app password.</td><td>Fastest fully local path; no cloud app registration or verification.</td><td class="tight">If app passwords end</td></tr>
+      <tr><td class="tight">D2</td><td>Read-only email first.</td><td>Eliminates the largest class of irreversible mistakes while trust is built.</td><td class="tight">After 2G</td></tr>
+      <tr><td class="tight">D3</td><td>Calendar read via private iCal.</td><td>No OAuth, no weekly re-auth, enough for briefs and scheduling suggestions.</td><td class="tight">When writes are needed</td></tr>
+      <tr><td class="tight">D4</td><td>Local task ledger.</td><td>Owns the model, avoids sync dependencies, exports cleanly later.</td><td class="tight">If a sync target is requested</td></tr>
+      <tr><td class="tight">D5</td><td>Telegram as first channel.</td><td>Free, reliable, supports buttons and voice notes, no inbound port.</td><td class="tight">If blocked</td></tr>
+      <tr><td class="tight">D6</td><td>Memory-first; notes optional.</td><td>The life model must survive deletion of the test vault.</td><td class="tight">Never</td></tr>
+      <tr><td class="tight">D7</td><td>Galaxy as world-model explorer.</td><td>A notes graph would become dead weight; a life graph earns daily use.</td><td class="tight">At M4 review</td></tr>
+      <tr><td class="tight">D8</td><td>Windows 11 only.</td><td>Matches the machine and keeps OS automation and packaging honest.</td><td class="tight">Post-v1.0</td></tr>
+      <tr><td class="tight">D9</td><td>Local model for private content.</td><td>The privacy boundary includes the model, not just storage.</td><td class="tight">Never without consent</td></tr>
+      <tr><td class="tight">D10</td><td>3B–4B model plus deterministic pipelines.</td><td>Fits 4 GB VRAM; small models are unreliable at multi-step tool use.</td><td class="tight">If draft quality fails</td></tr>
+      <tr><td class="tight">D11</td><td>Reads and local drafts automatic; external writes approved.</td><td>Preserves flow while keeping every irreversible step deliberate.</td><td class="tight">After 30 days of clean audit</td></tr>
+      <tr><td class="tight">D12</td><td>No grants at launch.</td><td>Grants are earned by repeated, reliable workflows, not assumed.</td><td class="tight">At M3 exit</td></tr>
+      <tr><td class="tight">D13</td><td>Six agent families, core six agents.</td><td>Function-based taxonomy survives app changes; a small roster stays debuggable.</td><td class="tight">Quarterly</td></tr>
+      <tr><td class="tight">D14</td><td>Domain operators, not one god-operator.</td><td>Narrow tool scope is the cheapest permission control.</td><td class="tight">Never</td></tr>
+      <tr><td class="tight">D15</td><td>No financial or health automation.</td><td>The downside is unbounded and the benefit is small.</td><td class="tight">Never</td></tr>
+      <tr><td class="tight">D16</td><td>Credentials in Windows Credential Manager.</td><td>Keeps secrets out of config, database, logs, and git.</td><td class="tight">Never</td></tr>
+      <tr><td class="tight">D17</td><td>No smart home in v1.0.</td><td>Different integration surface, low daily value relative to cost.</td><td class="tight">Post-v1.0</td></tr>
+    </tbody>
+  </table>
+
+  <h3>18.2 Open questions</h3>
+  <table>
+    <thead><tr><th class="tight">#</th><th>Question</th><th>Needed by</th><th>Default if unanswered</th></tr></thead>
+    <tbody>
+      <tr><td class="tight">Q1</td><td>Which exact local model — Qwen 2.5 3B, Qwen 2.5 4B, or Llama 3.2 3B?</td><td>Phase 2M</td><td>Benchmark all three on ten real triage tasks; pick the best at equal latency.</td></tr>
+      <tr><td class="tight">Q2</td><td>What are the working hours and quiet hours?</td><td>Phase 2H</td><td>09:00–18:00 working; 21:30–07:00 quiet.</td></tr>
+      <tr><td class="tight">Q3</td><td>Which folders may the file operator touch?</td><td>Phase 3D</td><td>Downloads and a staging folder only.</td></tr>
+      <tr><td class="tight">Q4</td><td>How long should mail bodies be retained?</td><td>Phase 2E.1</td><td>90 days, with per-thread deletion.</td></tr>
+      <tr><td class="tight">Q5</td><td>Should sent mail be read to learn voice?</td><td>Phase 2E.1</td><td>Yes, read-only, never quoted outward.</td></tr>
+      <tr><td class="tight">Q6</td><td>Which cloud provider stays configured for non-sensitive work?</td><td>Phase 2M</td><td>Keep the current NVIDIA NIM configuration; make it swappable.</td></tr>
+      <tr><td class="tight">Q7</td><td>Is a 7B model acceptable if 3B drafts disappoint?</td><td>Phase 3I</td><td>Yes, for batch triage only, with CPU offload.</td></tr>
+      <tr><td class="tight">Q8</td><td>Should the Galaxy remain 3D or offer a list-first view?</td><td>Phase 2C.2</td><td>Keep 3D, add a list view for accessibility and speed.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <span class="label">Approval</span>
+    <p>This draft is ready for review. Once approved, the next action is to open <code>phase-2e0-connector-foundation</code> and implement Section 7.1 with tests. No credentials are needed for that phase.</p>
+  </div>
+</div>
+
+<!-- ================= APPENDIX A ================= -->
+<div class="section">
+  <div class="brandline" style="margin-bottom:18px"><span>Appendix A</span><span>Glossary</span></div>
+  <h2 id="appA"><span class="n">A</span>Glossary</h2>
+  <p class="kicker">Shared vocabulary for the build. If a term is not here, it probably should not be in a requirement.</p>
+
+  <table>
+    <thead><tr><th class="tight">Term</th><th>Definition</th></tr></thead>
+    <tbody>
+      <tr><td class="tight"><strong>Approval</strong></td><td>A bound, expiring, single-use decision that authorises one exact payload to be executed by one tool.</td></tr>
+      <tr><td class="tight"><strong>Audit event</strong></td><td>An append-only record of something the system read, proposed, decided, or did. Metadata only.</td></tr>
+      <tr><td class="tight"><strong>Channel</strong></td><td>A transport for messages to or from the owner: Telegram, desktop, later SMS or voice.</td></tr>
+      <tr><td class="tight"><strong>Connector</strong></td><td>An adapter to one external system with declared read, draft, write, and delete capabilities.</td></tr>
+      <tr><td class="tight"><strong>Desk</strong></td><td>The control surface: runs, approvals, outbox, connector health, audit.</td></tr>
+      <tr><td class="tight"><strong>Draft</strong></td><td>A locally stored, unsent message or invite with a content hash.</td></tr>
+      <tr><td class="tight"><strong>Grant</strong></td><td>Scoped, expiring permission to perform a class of actions without per-action approval.</td></tr>
+      <tr><td class="tight"><strong>Life model</strong></td><td>The structured set of memories, people, projects, tasks, events, and sources that the assistant reasons over.</td></tr>
+      <tr><td class="tight"><strong>Lane</strong></td><td>The permitted reasoning location for a request: local, cloud, or refusal.</td></tr>
+      <tr><td class="tight"><strong>Memory</strong></td><td>A durable fact, preference, decision, or observation with provenance and sensitivity.</td></tr>
+      <tr><td class="tight"><strong>Open loop</strong></td><td>Anything waiting on the owner or on someone else: an unanswered mail, a promise, a blocked task.</td></tr>
+      <tr><td class="tight"><strong>Orchestrator</strong></td><td>The single component that owns a turn, dispatches agents, and requests approval.</td></tr>
+      <tr><td class="tight"><strong>Proposal</strong></td><td>A structured suggestion — task, memory, draft, or action — that is not yet committed.</td></tr>
+      <tr><td class="tight"><strong>Run</strong></td><td>One orchestrated turn, with agents, tools, tokens, cost, duration, and outcome.</td></tr>
+      <tr><td class="tight"><strong>Sensitivity</strong></td><td>The privacy class of a record: public, internal, private, sensitive, or secret.</td></tr>
+      <tr><td class="tight"><strong>Source</strong></td><td>The email, message, note, document, or meeting that a record derives from.</td></tr>
+      <tr><td class="tight"><strong>Subagent</strong></td><td>A scoped worker with a permission ceiling, a lane, a schema, and budgets.</td></tr>
+      <tr><td class="tight"><strong>Untrusted envelope</strong></td><td>A wrapper that marks external content as data, never instructions, before model input.</td></tr>
+      <tr><td class="tight"><strong>World graph</strong></td><td>The runtime projection of the life model served to the Galaxy.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>A.1 Naming</h3>
+  <p>The product, repository, package, and persona are all <strong>A.S.H.R.A</strong>. Internal identifiers use <code>ashra</code> in lower case. The earlier working name "myjarvis" appears only in the folder path and is not a product name.</p>
+</div>
+
+<!-- ================= APPENDIX B ================= -->
+<div class="section">
+  <div class="brandline" style="margin-bottom:18px"><span>Appendix B</span><span>Configuration reference</span></div>
+  <h2 id="appB"><span class="n">B</span>Configuration reference</h2>
+  <p class="kicker">Non-secret configuration lives in <code>config.json</code>. Secrets live in the vault and are referenced by name.</p>
+
+  <h4>Model and privacy</h4>
+  <pre><code>{
+  "provider": "ollama",
+  "model": "qwen2.5:3b",
+  "api_base": "http://127.0.0.1:11434/v1",
+  "cloud": {
+    "provider": "nvidia",
+    "model": "nvidia/nemotron-3.5-super-vl-120b-a12b",
+    "credential_ref": "ashra/cloud"
+  },
+  "privacy": {
+    "default_lane": "local",
+    "allow_cloud_for": ["public", "internal"],
+    "refuse": ["secret"]
+  }
+}</code></pre>
+
+  <h4>Connectors</h4>
+  <pre><code>{
+  "connectors": {
+    "gmail": {
+      "enabled": true,
+      "credential_ref": "ashra/gmail",
+      "mode": "read",
+      "folders": ["INBOX"],
+      "retention_days": 90
+    },
+    "gcal": {
+      "enabled": true,
+      "credential_ref": "ashra/calendar",
+      "mode": "read",
+      "window_back_days": 60,
+      "window_forward_days": 180
+    }
+  }
+}</code></pre>
+
+  <h4>Channels, tasks, and automation</h4>
+  <pre><code>{
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "credential_ref": "ashra/telegram",
+      "allowlist_chat_ids": ["&lt;your-chat-id&gt;"],
+      "quiet_hours": "21:30-07:00"
+    }
+  },
+  "tasks": {
+    "default_reminder": "09:00",
+    "max_high_priority_per_day": 3
+  },
+  "automation": {
+    "file_roots": ["%USERPROFILE%/Downloads", "%USERPROFILE%/AshraStaging"],
+    "delete_mode": "recycle",
+    "grants": []
+  }
+}</code></pre>
+
+  <h3>B.1 Rules</h3>
+  <ul>
+    <li><code>config.json</code> is gitignored and never served. The server rejects any request path that resolves to it.</li>
+    <li>A <code>credential_ref</code> is a name, not a value. The vault resolves it at call time.</li>
+    <li>The local lane is the default. Cloud is opt-in per sensitivity class, never per prompt.</li>
+    <li>Invalid or unknown keys fail startup with a precise message; the system does not guess.</li>
+    <li>Configuration is re-read per request where safe, so a model change does not require a restart.</li>
+  </ul>
+
+  <h3>B.2 Environment</h3>
+  <table>
+    <thead><tr><th class="tight">Item</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td class="tight">OS</td><td>Windows 11 Home, 10.0.26300</td></tr>
+      <tr><td class="tight">CPU / RAM</td><td>Intel i5-12500H, 16 GB</td></tr>
+      <tr><td class="tight">GPU</td><td>NVIDIA RTX 3050 Laptop, 4 GB VRAM</td></tr>
+      <tr><td class="tight">Python</td><td>3.14.7</td></tr>
+      <tr><td class="tight">Local runtime</td><td>Ollama on <code>127.0.0.1:11434</code></td></tr>
+      <tr><td class="tight">Server</td><td>Uvicorn on <code>127.0.0.1:4700</code></td></tr>
+      <tr><td class="tight">Database</td><td>SQLite at <code>data/ashra.db</code></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ================= APPENDIX C ================= -->
+<div class="section">
+  <div class="brandline" style="margin-bottom:18px"><span>Appendix C</span><span>Phase history</span></div>
+  <h2 id="appC"><span class="n">C</span>Phase history</h2>
+  <p class="kicker">What already exists at the time of this draft. The baseline is v0.7.1 at commit <code>5b774ac</code>, with 171 tests passing.</p>
+
+  <table>
+    <thead><tr><th class="tight">Phase</th><th>Scope</th><th class="tight">State</th></tr></thead>
+    <tbody>
+      <tr><td class="tight">0</td><td>Foundation: rename to A.S.H.R.A, package layout, config validation, tests, CI, small talk without a key.</td><td class="tight">Complete</td></tr>
+      <tr><td class="tight">1</td><td>FastAPI and SQLite, sessions, audit, permission tiers, filesystem tools, SSE streaming, MCP server.</td><td class="tight">Complete</td></tr>
+      <tr><td class="tight">1B</td><td>Assistant pipeline: note index, retrieval, provider transport, chat surface, capture.</td><td class="tight">Complete</td></tr>
+      <tr><td class="tight">1C</td><td>Orchestrator: bounded tool loop, approvals, proposal propagation.</td><td class="tight">Complete</td></tr>
+      <tr><td class="tight">1D</td><td>MCP integrations: client, configuration, manager, tool registration.</td><td class="tight">Complete</td></tr>
+      <tr><td class="tight">1E</td><td>Scoped subagents: registry, permission ceilings, child runner.</td><td class="tight">Complete</td></tr>
+      <tr><td class="tight">2A</td><td>Typed memory substrate: lifecycle, retrieval, graph, sensitivity.</td><td class="tight">Complete</td></tr>
+      <tr><td class="tight">2B</td><td>Brain UI: capture, review, search, provenance.</td><td class="tight">Complete</td></tr>
+      <tr><td class="tight">2C</td><td>Home hub: Needs You queue, brief region, capture loop.</td><td class="tight">Complete</td></tr>
+      <tr><td class="tight">2C.1</td><td>Galaxy load performance: local vendor assets, caching.</td><td class="tight">Complete</td></tr>
+      <tr><td class="tight">2E.0</td><td>Connector foundation.</td><td class="tight">Next</td></tr>
+      <tr><td class="tight">2M</td><td>Local model and privacy router.</td><td class="tight">Planned</td></tr>
+    </tbody>
+  </table>
+
+  <h3>C.1 What this means for the reader</h3>
+  <p>The foundation is not a prototype. Sessions, approvals, audit, memory, agents, and the Home hub already exist and are tested. The work ahead is mostly connective: real data, a privacy router, a control channel, and the task ledger that turns observation into action.</p>
+
+  <h3>C.2 Immediate next steps</h3>
+  <ol>
+    <li><strong>Approve the scope.</strong> Confirm Sections 3, 6, and 9. Anything not listed as in scope waits.</li>
+    <li><strong>Open the connector foundation.</strong> Branch <code>phase-2e0-connector-foundation</code>; implement the contract in Section 7.1 with fixtures and tests. No credentials required.</li>
+    <li><strong>Install the local runtime.</strong> Ollama, then benchmark Qwen 2.5 3B, Qwen 2.5 4B, and Llama 3.2 3B on ten real triage tasks; choose on quality at equal latency (Q1).</li>
+    <li><strong>Prepare credentials locally.</strong> Gmail app password, calendar iCal address, and Telegram bot token go into Windows Credential Manager through a setup command — never into chat, config, or git.</li>
+    <li><strong>Set the daily defaults.</strong> Working hours, quiet hours, reminder time, and the two file roots the operator may touch (Q2, Q3).</li>
+  </ol>
+
+  <div class="callout plain">
+    <span class="label">Document end</span>
+    <p>A.S.H.R.A Product Requirements Document, version 1.0 — Draft, 13 November 2026. Prepared for local review. Not for distribution or publication.</p>
+  </div>
+</div>
+
+</body>
+</html>

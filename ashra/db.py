@@ -24,7 +24,7 @@ from typing import Any
 
 from .sessions import SESSION_RE
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 DEFAULT_TTL_SECONDS = 6 * 60 * 60
 DEFAULT_APPROVAL_TTL_SECONDS = 15 * 60
 DEFAULT_MAX_MESSAGES = 8
@@ -131,7 +131,7 @@ class Database:
                         source TEXT NOT NULL DEFAULT 'manual',
                         source_ref TEXT,
                         confidence REAL NOT NULL DEFAULT 0.5,
-                        sensitivity TEXT NOT NULL DEFAULT 'normal',
+                        sensitivity TEXT NOT NULL DEFAULT 'internal',
                         status TEXT NOT NULL DEFAULT 'proposed',
                         pinned INTEGER NOT NULL DEFAULT 0,
                         reinforcement INTEGER NOT NULL DEFAULT 1,
@@ -168,6 +168,41 @@ class Database:
 
                     CREATE INDEX IF NOT EXISTS idx_memory_events_memory
                         ON memory_events(memory_id, id);
+
+                    CREATE TABLE IF NOT EXISTS connectors (
+                        id TEXT PRIMARY KEY,
+                        kind TEXT NOT NULL,
+                        credential_ref TEXT,
+                        scopes TEXT NOT NULL DEFAULT '{}',
+                        capabilities TEXT NOT NULL DEFAULT '{}',
+                        status TEXT NOT NULL DEFAULT 'unknown',
+                        error TEXT,
+                        last_sync_at REAL,
+                        created_at REAL NOT NULL,
+                        updated_at REAL NOT NULL
+                    );
+
+                    CREATE TABLE IF NOT EXISTS sources (
+                        id TEXT PRIMARY KEY,
+                        connector_id TEXT NOT NULL,
+                        kind TEXT NOT NULL,
+                        external_id TEXT,
+                        thread_id TEXT,
+                        subject TEXT,
+                        occurred_at REAL,
+                        local_path TEXT,
+                        sensitivity TEXT NOT NULL DEFAULT 'private',
+                        metadata TEXT,
+                        created_at REAL NOT NULL,
+                        updated_at REAL NOT NULL
+                    );
+
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_sources_identity
+                        ON sources(connector_id, kind, external_id)
+                        WHERE external_id IS NOT NULL;
+
+                    CREATE INDEX IF NOT EXISTS idx_sources_connector
+                        ON sources(connector_id, occurred_at DESC);
                     """
                 )
                 # FTS5 is optional: some Python builds ship SQLite without it.
@@ -180,6 +215,17 @@ class Database:
                     self.fts_enabled = True
                 except sqlite3.OperationalError:
                     self.fts_enabled = False
+                # Forward-only data migrations.  Schema v4 replaced the old
+                # three-value sensitivity vocabulary with the PRD's five
+                # classes; existing rows move forward and never back.
+                current = int(
+                    connection.execute("PRAGMA user_version").fetchone()[0]
+                )
+                if current < 4:
+                    connection.execute(
+                        "UPDATE memories SET sensitivity = 'internal' "
+                        "WHERE sensitivity = 'normal'"
+                    )
                 connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             self._initialized = True
 
@@ -582,6 +628,265 @@ class Database:
                 ).fetchone()
             else:
                 row = connection.execute("SELECT COUNT(*) AS n FROM approvals").fetchone()
+        return int(row["n"] if row else 0)
+
+    # ------------------------------------------------------------------
+    # connectors and sources
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _connector_dict(row: sqlite3.Row) -> dict[str, Any]:
+        def decode(value: Any, fallback: Any) -> Any:
+            if not value:
+                return fallback
+            try:
+                return json.loads(value)
+            except (TypeError, ValueError):
+                return fallback
+
+        return {
+            "id": row["id"],
+            "kind": row["kind"],
+            "credential_ref": row["credential_ref"],
+            "scopes": decode(row["scopes"], {}),
+            "capabilities": decode(row["capabilities"], {}),
+            "status": row["status"],
+            "error": row["error"],
+            "last_sync_at": row["last_sync_at"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+
+    def upsert_connector_state(
+        self,
+        connector_id: str,
+        *,
+        kind: str,
+        credential_ref: str | None = None,
+        scopes: Any = None,
+        capabilities: Any = None,
+        status: str = "unknown",
+        error: str | None = None,
+        last_sync_at: float | None = None,
+    ) -> dict[str, Any]:
+        """Record a connector's declaration and last-known health.
+
+        Only configuration and status are stored.  Credential *references* may
+        appear; credential values must never reach this table.
+        """
+        self.initialize()
+        now = time.time()
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO connectors
+                    (id, kind, credential_ref, scopes, capabilities, status,
+                     error, last_sync_at, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    kind = excluded.kind,
+                    credential_ref = COALESCE(
+                        excluded.credential_ref, connectors.credential_ref
+                    ),
+                    scopes = CASE
+                        WHEN excluded.scopes = '{}' THEN connectors.scopes
+                        ELSE excluded.scopes
+                    END,
+                    capabilities = CASE
+                        WHEN excluded.capabilities = '{}' THEN connectors.capabilities
+                        ELSE excluded.capabilities
+                    END,
+                    status = excluded.status,
+                    error = excluded.error,
+                    last_sync_at = COALESCE(
+                        excluded.last_sync_at, connectors.last_sync_at
+                    ),
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    str(connector_id),
+                    str(kind),
+                    credential_ref,
+                    json.dumps(scopes or {}, ensure_ascii=False, default=str),
+                    json.dumps(capabilities or {}, ensure_ascii=False, default=str),
+                    str(status),
+                    error,
+                    last_sync_at,
+                    now,
+                    now,
+                ),
+            )
+            row = connection.execute(
+                "SELECT * FROM connectors WHERE id = ?",
+                (str(connector_id),),
+            ).fetchone()
+        return self._connector_dict(row) if row else {}
+
+    def get_connector_state(self, connector_id: str) -> dict[str, Any] | None:
+        self.initialize()
+        with self._lock, self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM connectors WHERE id = ?",
+                (str(connector_id),),
+            ).fetchone()
+        return self._connector_dict(row) if row else None
+
+    def list_connector_states(self) -> list[dict[str, Any]]:
+        self.initialize()
+        with self._lock, self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM connectors ORDER BY id"
+            ).fetchall()
+        return [self._connector_dict(row) for row in rows]
+
+    @staticmethod
+    def _source_dict(row: sqlite3.Row) -> dict[str, Any]:
+        metadata: Any = row["metadata"]
+        if metadata:
+            try:
+                metadata = json.loads(metadata)
+            except (TypeError, ValueError):
+                pass
+        return {
+            "id": row["id"],
+            "connector_id": row["connector_id"],
+            "kind": row["kind"],
+            "external_id": row["external_id"],
+            "thread_id": row["thread_id"],
+            "subject": row["subject"],
+            "occurred_at": row["occurred_at"],
+            "local_path": row["local_path"],
+            "sensitivity": row["sensitivity"],
+            "metadata": metadata,
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+
+    def upsert_source(
+        self,
+        *,
+        connector_id: str,
+        kind: str,
+        external_id: str | None = None,
+        thread_id: str | None = None,
+        subject: str | None = None,
+        occurred_at: float | None = None,
+        local_path: str | None = None,
+        sensitivity: str = "private",
+        metadata: Any = None,
+    ) -> tuple[str, bool]:
+        """Insert or update one external record.
+
+        Returns ``(source_id, created)``.  Identity is
+        ``(connector_id, kind, external_id)`` so a repeated poll updates the
+        existing row instead of duplicating it.  A record without an external id
+        cannot be deduplicated and is always inserted.
+        """
+        self.initialize()
+        now = time.time()
+        payload = json.dumps(metadata, ensure_ascii=False, default=str) if metadata else None
+        with self._lock, self._connect() as connection:
+            existing = None
+            if external_id:
+                existing = connection.execute(
+                    "SELECT id FROM sources "
+                    "WHERE connector_id = ? AND kind = ? AND external_id = ?",
+                    (str(connector_id), str(kind), str(external_id)),
+                ).fetchone()
+
+            if existing is not None:
+                source_id = str(existing["id"])
+                connection.execute(
+                    """
+                    UPDATE sources SET
+                        thread_id = COALESCE(?, thread_id),
+                        subject = COALESCE(?, subject),
+                        occurred_at = COALESCE(?, occurred_at),
+                        local_path = COALESCE(?, local_path),
+                        sensitivity = ?,
+                        metadata = COALESCE(?, metadata),
+                        updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        thread_id,
+                        subject,
+                        occurred_at,
+                        local_path,
+                        str(sensitivity),
+                        payload,
+                        now,
+                        source_id,
+                    ),
+                )
+                return source_id, False
+
+            source_id = f"src_{uuid.uuid4().hex[:24]}"
+            connection.execute(
+                """
+                INSERT INTO sources
+                    (id, connector_id, kind, external_id, thread_id, subject,
+                     occurred_at, local_path, sensitivity, metadata,
+                     created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    source_id,
+                    str(connector_id),
+                    str(kind),
+                    external_id,
+                    thread_id,
+                    subject,
+                    occurred_at,
+                    local_path,
+                    str(sensitivity),
+                    payload,
+                    now,
+                    now,
+                ),
+            )
+            return source_id, True
+
+    def get_source(self, source_id: str) -> dict[str, Any] | None:
+        self.initialize()
+        with self._lock, self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM sources WHERE id = ?",
+                (str(source_id),),
+            ).fetchone()
+        return self._source_dict(row) if row else None
+
+    def list_sources(
+        self,
+        connector_id: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        self.initialize()
+        limit = max(1, min(500, int(limit)))
+        with self._lock, self._connect() as connection:
+            if connector_id:
+                rows = connection.execute(
+                    "SELECT * FROM sources WHERE connector_id = ? "
+                    "ORDER BY COALESCE(occurred_at, created_at) DESC LIMIT ?",
+                    (str(connector_id), limit),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    "SELECT * FROM sources "
+                    "ORDER BY COALESCE(occurred_at, created_at) DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+        return [self._source_dict(row) for row in rows]
+
+    def count_sources(self, connector_id: str | None = None) -> int:
+        self.initialize()
+        with self._lock, self._connect() as connection:
+            if connector_id:
+                row = connection.execute(
+                    "SELECT COUNT(*) AS n FROM sources WHERE connector_id = ?",
+                    (str(connector_id),),
+                ).fetchone()
+            else:
+                row = connection.execute("SELECT COUNT(*) AS n FROM sources").fetchone()
         return int(row["n"] if row else 0)
 
 

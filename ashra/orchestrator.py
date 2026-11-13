@@ -23,6 +23,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from typing import Any
 
+from .agents.context import tool_context
 from .chat import ChatResult, ChatService, Prepared, _chunks, build_system_prompt
 from .config import load_config
 from .db import Database
@@ -539,13 +540,14 @@ class Orchestrator:
         request_id: str | None,
     ) -> ToolOutcome:
         try:
-            result = self.registry.invoke(
-                call.name,
-                call.arguments,
-                granted=granted,
-                approved=approved,
-                request_id=request_id,
-            )
+            with tool_context(granted, request_id):
+                result = self.registry.invoke(
+                    call.name,
+                    call.arguments,
+                    granted=granted,
+                    approved=approved,
+                    request_id=request_id,
+                )
         except Exception as exc:  # noqa: BLE001 - fed back to the model as data
             return ToolOutcome(
                 call_id=call.id,

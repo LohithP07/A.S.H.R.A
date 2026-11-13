@@ -92,6 +92,7 @@ viewer/ (public)
 server.py (Uvicorn) ── ashra/api.py ── ashra/orchestrator.py
                                         ├── chat.py       retrieval + prompt pipeline
                                         ├── tools.py      permissions + registry
+                                        ├── agents/       specialist registry + child runner
                                         ├── integrations/ MCP client + tool registration
                                         ├── db.py         SQLite sessions, approvals + audit
                                         ├── notes.py      load + clean markdown
@@ -297,6 +298,43 @@ ashra/mcp_server.py ── scoped read-only filesystem tools
 - `permission: "act"` on an integration is rejected with a clear config error.
 - The full suite passes with and without the MCP SDK installed (the real SDK
   test skips when it is absent).
+
+---
+
+## Phase 1E — Scoped subagents (complete)
+
+- [x] Add `ashra/agents/` with an `AgentSpec`, an `AgentRegistry`, and a
+      `SubagentRunner`.
+- [x] Ship three default specialists: `researcher` (`read`), `writer`
+      (`draft`), and `operator` (`act`).
+- [x] Expose a `spawn_agent` tool that accepts an agent name and one task.
+- [x] Enforce a permission ceiling: the child holds the weaker of its declared
+      permission and the parent's granted permission.
+- [x] Enforce a per-agent tool allowlist with glob patterns
+      (`fs_*`, `*_search`).
+- [x] Remove `spawn_agent` from child tool lists so delegation cannot recurse.
+- [x] Refuse approval-gated tools in children and return the proposed action to
+      the parent, which owns the approval queue.
+- [x] Return a structured result (`agent`, `status`, `answer`, `steps`,
+      `tools`, `permission`) and write one `agent` audit event per run.
+- [x] Add ContextVars for the current permission and request id, set around
+      `/tools/invoke` and every orchestrator tool execution.
+- [x] Add `GET /agents` and `GET /agents/{name}`, and include the agent count in
+      `GET /status`.
+
+### Phase 1E acceptance criteria
+
+- A `read` caller can spawn `researcher`; the child runs read tools and returns
+  a structured summary.
+- An `operator` spawned by a `read` caller runs as `read` and cannot execute an
+  `act` tool.
+- An approval-gated tool is never advertised to a child; a hallucinated call is
+  refused with an instruction to delegate the proposal to the parent.
+- A child never sees `spawn_agent` in its tool schemas.
+- The child loop stops at its step limit with a readable status instead of
+  spinning.
+- `GET /agents` lists the specialists and `GET /status` reports the count.
+- The full suite passes.
 
 ---
 
@@ -522,6 +560,7 @@ ashra/
   recall.py                 deterministic capture-history answers
   remember.py               capture CRUD + graph rebuild
   tools.py                  permission tiers + tool registry + scoped filesystem
+  agents/                   specialist registry, permission ceiling, child runner
   integrations/             MCP client, integration config, tool registration
   mcp_server.py             optional read-only MCP filesystem server
   orchestrator.py           bounded tool loop + approval continuation

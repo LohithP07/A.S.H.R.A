@@ -462,6 +462,32 @@ conversation into memory without a detour through the Brain.
 
 ---
 
+## Phase 2C.1 — Galaxy load performance (complete)
+
+The Galaxy was waiting on the network and on its own intro timers even when
+everything was already local.
+
+- [x] Self-host pinned `three.js` and `3d-force-graph` in `viewer/vendor/`
+      instead of loading them from jsDelivr.
+- [x] Load the fonts stylesheet without blocking first paint.
+- [x] Preload and defer the vendor scripts.
+- [x] Remove the `document.fonts.ready` wait from boot.
+- [x] Shorten the camera intro and reveal the stage as soon as the first frame
+      is ready.
+- [x] Enable gzip for static assets and JSON; keep SSE uncompressed.
+- [x] Stop sending `Cache-Control: no-store` for viewer assets. Vendor files
+      are immutable and versioned; HTML/CSS/JS revalidate with a cheap 304.
+- [x] Bump the version to `0.7.1`.
+
+### Phase 2C.1 acceptance criteria
+
+- A warm Galaxy load reveals the graph in about a second or less.
+- Vendor scripts are served locally, compressed, and reused from cache.
+- The loader no longer waits on fonts or arbitrary multi-second timers.
+- Chat streaming still flushes token by token.
+
+---
+
 ## Phase 2 — The Voice (implemented in this pass)
 
 - [x] Speak every answer with `speechSynthesis`, preferring a British English

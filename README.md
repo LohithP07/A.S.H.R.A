@@ -286,7 +286,7 @@ To add a new note category:
 - `ashra/mcp_server.py` - optional read-only MCP server for the notes vault.
 - `ashra/remember.py` - captures, appends, renames, and deletes note files.
 - `ashra/config.py` - loads and validates `config.json`.
-- `viewer/` - static front-end assets: Home (`index.html`, `home.css`, `home.js`), Galaxy (`galaxy.html`, `app.js`, `styles.css`), and Brain (`brain.html`, `brain.js`, `brain.css`).
+- `viewer/` - static front-end assets: Home (`index.html`, `home.css`, `home.js`), Galaxy (`galaxy.html`, `app.js`, `styles.css`), Brain (`brain.html`, `brain.js`, `brain.css`), and pinned 3D libraries in `vendor/`.
 
 ## Contributing
 

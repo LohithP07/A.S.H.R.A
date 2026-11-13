@@ -7,7 +7,10 @@
 <meta name="description" content="A.S.H.R.A, a private, note-grounded knowledge assistant with an interactive 3D map of your notes.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600&display=swap"></noscript>
+<link rel="preload" href="vendor/three.min.js?v=0.152.2" as="script">
+<link rel="preload" href="vendor/3d-force-graph.min.js?v=1.73.4" as="script">
 <link rel="stylesheet" href="styles.css">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9C%A6%3C/text%3E%3C/svg%3E">
 </head>
@@ -96,9 +99,9 @@
   <p class="loader-sub" id="loader-sub">Mapping your notes into a knowledge galaxy</p>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.73.4/dist/3d-force-graph.min.js"></script>
-<script src="graph-data.js"></script>
-<script src="app.js"></script>
+<script defer src="vendor/three.min.js?v=0.152.2"></script>
+<script defer src="vendor/3d-force-graph.min.js?v=1.73.4"></script>
+<script defer src="graph-data.js"></script>
+<script defer src="app.js"></script>
 </body>
 </html>

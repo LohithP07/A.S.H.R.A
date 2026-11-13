@@ -18,13 +18,13 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
-from brain.chat import ChatService
-from brain.config import load_config
-from brain.errors import ConfigError, NotConfiguredError, ProviderError
-from brain.remember import append as append_note
-from brain.remember import forget as forget_note
-from brain.remember import remember as capture_note
-from brain.remember import rename as rename_note
+from ashra.chat import ChatService
+from ashra.config import load_config
+from ashra.errors import ConfigError, NotConfiguredError, ProviderError
+from ashra.remember import append as append_note
+from ashra.remember import forget as forget_note
+from ashra.remember import remember as capture_note
+from ashra.remember import rename as rename_note
 
 BASE_DIR = Path(__file__).resolve().parent
 VIEWER_DIR = BASE_DIR / "viewer"
@@ -44,7 +44,7 @@ _INVALID = object()
 class ViewerHandler(SimpleHTTPRequestHandler):
     """Static viewer + POST /chat, rooted at viewer/."""
 
-    server_version = "JarvisViewer/1.1"
+    server_version = "A.S.H.R.A/2.0"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(VIEWER_DIR), **kwargs)
@@ -183,7 +183,7 @@ class ViewerHandler(SimpleHTTPRequestHandler):
                 500,
                 {
                     "error": "server_error",
-                    "detail": "The brain hit an unexpected error. Check the server log.",
+                    "detail": "A.S.H.R.A hit an unexpected error. Check the server log.",
                 },
             )
             return
@@ -326,7 +326,7 @@ class ViewerHandler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
 
-def brain_status() -> str:
+def assistant_status() -> str:
     try:
         config = load_config(CONFIG_PATH)
     except ConfigError as exc:
@@ -353,7 +353,7 @@ def main() -> int:
 
     print(f"Serving {VIEWER_DIR}")
     print(f"Open in Chrome:  http://{HOST}:{PORT}/")
-    print(f"Brain: {brain_status()}")
+    print(f"A.S.H.R.A: {assistant_status()}")
     print("Press Ctrl+C to stop.")
     try:
         server.serve_forever()

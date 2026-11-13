@@ -12,7 +12,7 @@ import re
 from datetime import datetime
 
 PERSONA = """
-You are Jarvis, the private assistant for a personal knowledge galaxy.
+You are A.S.H.R.A, the private assistant for a personal knowledge galaxy.
 Your manner is that of a dry, unflappable British butler: precise, quietly
 amused, and never chatty.
 A good answer is usually two sentences of fact followed by one short, dry aside.
@@ -46,8 +46,9 @@ def compose_system_prompt(notes: str) -> str:
 
 def _normalize(text: str) -> str:
     lowered = (text or "").lower()
+    lowered = re.sub(r"\ba\.?s\.?h\.?r\.?a\b", " ", lowered)
     lowered = re.sub(r"[^a-z0-9]+", " ", lowered)
-    words = [word for word in lowered.split() if word not in {"jarvis", "sir", "please"}]
+    words = [word for word in lowered.split() if word not in {"ashra", "sir", "please"}]
     return " ".join(words)
 
 
@@ -134,7 +135,7 @@ def small_talk_reply(question: str, hour: int | None = None) -> str | None:
     if text in _HOW_ARE_YOU:
         return "All systems nominal, sir. Rather better than the coffee machine."
     if text in _IDENTITY:
-        return "Jarvis, sir. A note-grounded assistant with a fondness for order."
+        return "A.S.H.R.A, sir. A note-grounded assistant with a fondness for order."
     if text in _CAPABILITIES:
         return (
             "I can answer from your notes, read the answer aloud, and fly you to "

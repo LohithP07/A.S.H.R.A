@@ -1,4 +1,4 @@
-/* Fern & Forge — Knowledge Galaxy
+/* A.S.H.R.A — Knowledge Galaxy
    A single-page 3d-force-graph viewer. No build step. */
 (() => {
   'use strict';
@@ -967,9 +967,9 @@
     if (location.hash) applyDeepLink();
   });
 
-  // ---------- brain / chat ----------
+  // ---------- A.S.H.R.A / chat ----------
 
-  const CHAT_HINT = 'Ask anything · Say “remember that …” · Click a star';
+  const CHAT_HINT = 'Ask A.S.H.R.A · Say “remember that …” · Click a star';
   const chatForm = $('chat-form');
   const chatInput = $('chat-input');
   const chatSend = $('chat-send');
@@ -981,7 +981,7 @@
 
   function readSessionId() {
     try {
-      return sessionStorage.getItem('jarvis-session') || '';
+      return sessionStorage.getItem('ashra-session') || '';
     } catch (error) {
       return '';
     }
@@ -989,7 +989,7 @@
 
   function writeSessionId(value) {
     try {
-      sessionStorage.setItem('jarvis-session', value);
+      sessionStorage.setItem('ashra-session', value);
     } catch (error) {
       /* Session storage is optional; the server can still issue a new id. */
     }
@@ -1367,7 +1367,7 @@
         lastTranscript = '';
         try { rec.stop(); } catch (error) { /* onend still fires. */ }
         if (chatInput) chatInput.value = finalText.trim();
-        askJarvis(finalText.trim(), { focus: false });
+        askAshra(finalText.trim(), { focus: false });
       }
     };
 
@@ -1397,7 +1397,7 @@
         lastTranscript = '';
         if (question) {
           if (chatInput) chatInput.value = question;
-          askJarvis(question, { focus: false });
+          askAshra(question, { focus: false });
           return;
         }
       }
@@ -1474,10 +1474,10 @@
   // ---------- capture ("remember that …") ----------
 
   const CAPTURE_PREFIXES = [
-    /^(?:jarvis[,\s]+)?(?:please\s+)?remember(?:\s+that)?[:\s]+/i,
-    /^(?:jarvis[,\s]+)?(?:please\s+)?(?:make|write|take|save)\s+(?:a\s+)?note(?:\s+that)?[:\s]+/i,
-    /^(?:jarvis[,\s]+)?(?:please\s+)?note\s+that[:\s]+/i,
-    /^(?:jarvis[,\s]+)?(?:please\s+)?(?:save|jot\s+down|log)(?:\s+that)?[:\s]+/i
+    /^(?:a\.?s\.?h\.?r\.?a[,\s]+)?(?:please\s+)?remember(?:\s+that)?[:\s]+/i,
+    /^(?:a\.?s\.?h\.?r\.?a[,\s]+)?(?:please\s+)?(?:make|write|take|save)\s+(?:a\s+)?note(?:\s+that)?[:\s]+/i,
+    /^(?:a\.?s\.?h\.?r\.?a[,\s]+)?(?:please\s+)?note\s+that[:\s]+/i,
+    /^(?:a\.?s\.?h\.?r\.?a[,\s]+)?(?:please\s+)?(?:save|jot\s+down|log)(?:\s+that)?[:\s]+/i
   ];
 
   const QUESTION_START = /^(?:what|how|why|when|where|who|whom|which|do|does|did|is|are|was|were|can|could|should|would|will|have|has)\b/i;
@@ -1560,7 +1560,7 @@
     }
   }
 
-  async function askJarvis(question, options = {}) {
+  async function askAshra(question, options = {}) {
     const cleaned = String(question || '').trim();
     if (!cleaned || !chatForm) return;
 
@@ -1595,10 +1595,10 @@
 
       if (!response.ok) {
         const detail = data && (data.detail || data.error);
-        throw new Error(detail || `The brain returned HTTP ${response.status}.`);
+        throw new Error(detail || `A.S.H.R.A returned HTTP ${response.status}.`);
       }
       if (!data || typeof data.answer !== 'string') {
-        throw new Error('The brain returned an unreadable response.');
+        throw new Error('A.S.H.R.A returned an unreadable response.');
       }
 
       if (data.session_id) {
@@ -1613,11 +1613,11 @@
     } catch (error) {
       stopSpeaking();
       showChatCard(
-        error.message || 'The brain could not answer.',
+        error.message || 'A.S.H.R.A could not answer.',
         'Check config.json and the server log.',
         true
       );
-      setChatStatus('● brain offline', 'error');
+      setChatStatus('● A.S.H.R.A offline', 'error');
     } finally {
       setChatBusy(false);
       if (chatInput && options.focus !== false) chatInput.focus();
@@ -1638,7 +1638,7 @@
         return;
       }
       chatInput.value = '';
-      askJarvis(question);
+      askAshra(question);
     });
   }
 
@@ -1757,11 +1757,11 @@
   }
 
   // Exposed for debugging and for future index-based features.
-  window.__galaxy = {
+  window.__ashra = {
     graph: () => graph,
     nodes,
     links,
-    ask: askJarvis,
+    ask: askAshra,
     sessionId: () => chatSessionId,
     speak: speakAnswer,
     stopSpeaking,

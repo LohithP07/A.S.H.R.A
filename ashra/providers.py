@@ -233,5 +233,5 @@ def make_provider(config: AppConfig) -> ChatProvider:
     if config.provider in {"nvidia", "openai_compatible"}:
         return OpenAICompatibleProvider(config)
     raise ProviderError(
-        f"Unsupported provider '{config.provider}'. Add it in brain/providers.py."
+        f"Unsupported provider '{config.provider}'. Add it in ashra/providers.py."
     )

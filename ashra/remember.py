@@ -41,7 +41,7 @@ _RELATED_LINE_RE = re.compile(r"^\s*Related\s*:", re.IGNORECASE)
 # The viewer strips this before posting, but the endpoint is public to the
 # local machine, so the same courtesy is repeated here.
 _PREFIX_RE = re.compile(
-    r"^(?:jarvis[,\s]+)?(?:please\s+)?"
+    r"^(?:a\.?\s*s\.?\s*h\.?\s*r\.?\s*a[,\s]+)?(?:please\s+)?"
     r"(?:"
     r"remember(?:\s+that)?"
     r"|(?:make|write|take|save)\s+(?:a\s+)?note(?:\s+that)?"

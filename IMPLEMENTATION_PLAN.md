@@ -1,8 +1,8 @@
-# JARVIS / Personal Assistant — Implementation Plan
+# A.S.H.R.A / Personal Assistant — Implementation Plan
 
 ## North star
 
-Start from the Prompt Pack's 3D knowledge galaxy, add a note-grounded brain,
+Start from the Prompt Pack's 3D knowledge galaxy, add a note-grounded assistant,
 then grow it into a personal assistant that can use tools, remember context,
 and eventually work outside this browser demo.
 
@@ -27,14 +27,14 @@ extension, not a rewrite.
 
 - `build.py` scans `notes/**/*.md` with the standard library and writes
   `viewer/graph-data.js`.
-- 25 notes, 94 links, ~689-character average excerpts.
+- 26 notes, 95 links, ~666-character average excerpts.
 - Every node id equals its index in the nodes array.
 - `viewer/index.html` + `app.js` render a cinematic 3D force graph from CDN
   libraries, with starfield, glow, color groups, idle drift, camera flights,
   neighbor highlighting, and a note panel.
 - `server.py` serves only `viewer/` on `127.0.0.1:4700`.
 
-**Prompt 2 — The Brain: implemented in this pass.**
+**Prompt 2 — The Assistant: implemented in this pass.**
 
 - `config.json` in the project root (gitignored; the key stays server-side).
 - Current configuration targets NVIDIA NIM with
@@ -46,18 +46,34 @@ extension, not a rewrite.
 
 ---
 
+## Phase 0 — Foundation (complete)
+
+- [x] Use A.S.H.R.A as the project and assistant name across the UI, persona,
+      session keys, capture prefixes, server banner, and documentation.
+- [x] Rename the Python package from `brain/` to `ashra/`.
+- [x] Fix the README configuration example (`api_key`, supported providers,
+      `api_base`) and the capture filename documentation.
+- [x] Make small talk work before a provider key is configured.
+- [x] Add a `tests/` suite covering config, retrieval, chat, capture CRUD, and
+      the HTTP server.
+- [x] Add a GitHub Actions CI workflow.
+- [x] Add `pyproject.toml`, `LICENSE`, and development tooling metadata.
+- [x] Keep the Python backend dependency-free.
+
+---
+
 ## Architecture principles
 
 1. **Keep secrets server-side.** `config.json` lives outside `viewer/`; the
    viewer server is rooted at `viewer/`. The server also explicitly refuses
    requests for `config.json` and `.env`.
-2. **Keep the brain modular.** Retrieval, sessions, provider transport, and
+2. **Keep the assistant modular.** Retrieval, sessions, provider transport, and
    configuration are separate modules. A future personal assistant can replace
    one without touching the others.
 3. **Keep the browser contract stable.** The viewer only knows
    `POST /chat -> {answer, nodes, sources, session_id}`. New backends, tools, or
    models should preserve that shape where possible.
-4. **Prefer stdlib until a dependency earns its place.** The current brain uses
+4. **Prefer stdlib until a dependency earns its place.** The current assistant uses
    only `urllib` and the standard library.
 5. **Ground answers in notes.** The system prompt forbids outside knowledge and
    requires the assistant to admit when the notes do not cover a question.
@@ -72,7 +88,7 @@ viewer/ (public)
   app.js  ── POST /chat ──┐
   styles.css              │
                           ▼
-server.py (local HTTP) ── brain/chat.py
+server.py (local HTTP) ── ashra/chat.py
                              ├── notes.py      load + clean markdown
                              ├── retrieval.py  keyword scoring -> top 6
                              ├── sessions.py   short in-memory history
@@ -87,13 +103,13 @@ server.py (local HTTP) ── brain/chat.py
 
 ---
 
-## Phase 1 — The Brain (current)
+## Phase 1 — The Assistant (current)
 
 ### 1. Configuration
 
 - [x] Create root `config.json` with `api_key`, `model`, `provider`, and tuning
       fields.
-- [x] Validate and bound config values in `brain/config.py`.
+- [x] Validate and bound config values in `ashra/config.py`.
 - [x] Re-read config per request so the user can paste a key without restarting.
 - [x] Never include the key in API responses, HTML, or served files.
 - [x] Return a clear `model_not_configured` response when the placeholder is
@@ -131,7 +147,7 @@ server.py (local HTTP) ── brain/chat.py
 - [x] Handle reasoning models: if internal reasoning exhausts `max_tokens`
       before any visible answer, retry once with a 4096-token budget and then
       report a clear error.
-- [ ] Future: add more backends by extending `brain/providers.py`.
+- [ ] Future: add more backends by extending `ashra/providers.py`.
 
 ### 5. Sessions
 
@@ -156,7 +172,7 @@ server.py (local HTTP) ── brain/chat.py
 - [x] Add a bottom input bar and Ask button.
 - [x] Show a thinking status, answer card, and source labels.
 - [x] Keep the session id in `sessionStorage`.
-- [x] Expose `window.__galaxy.ask(question)` for future voice and automation.
+- [x] Expose `window.__ashra.ask(question)` for future voice and automation.
 - [x] Make the bar responsive and hide the legend on narrow screens.
 - [ ] Future: add markdown rendering if answers ever include rich formatting.
       (Current answers are plain text by design.)
@@ -171,11 +187,11 @@ server.py (local HTTP) ── brain/chat.py
 
 ### Phase 1 acceptance criteria
 
-- `python server.py` starts on port 4700 and prints the brain status.
+- `python server.py` starts on port 4700 and prints the assistant status.
 - The viewer loads and the input bar is usable.
 - With a valid key in `config.json`, a question returns a 2–3 sentence answer
   grounded in the notes, plus the source node indexes.
-- With the placeholder key, the UI says the brain is not configured instead of
+- With the placeholder key, the UI says the assistant is not configured instead of
   failing silently.
 - Follow-up questions in the same tab use the short server-side history.
 - No secret appears in browser DevTools, HTML, or a served file.
@@ -188,7 +204,7 @@ server.py (local HTTP) ── brain/chat.py
       voice (`en-GB`) and falling back to any English voice.
 - [x] Add the 🎙 mic button using `SpeechRecognition` /
       `webkitSpeechRecognition` (Chrome and Edge).
-- [x] Route the final transcript through the same `askJarvis()` path and
+- [x] Route the final transcript through the same `askAshra()` path and
       `POST /chat`; no second answer path.
 - [x] Show `● listening…`, `● thinking…`, `● speaking…`, and microphone error
       status lines.
@@ -198,10 +214,10 @@ server.py (local HTTP) ── brain/chat.py
       request fails.
 - [x] Disable the mic while a request is in flight.
 - [x] Expose `speak`, `listen`, `stopSpeaking`, `voice`, `speechSupported`, and
-      `voiceInputSupported` on `window.__galaxy` for future automation.
+      `voiceInputSupported` on `window.__ashra` for future automation.
 
 Implementation note: voice remains a viewer concern. It calls the same
-`/chat` endpoint and reuses `askJarvis()`; the brain does not know about it.
+`/chat` endpoint and reuses `askAshra()`; the assistant does not know about it.
 
 Test plan:
 
@@ -217,9 +233,9 @@ Test plan:
 5. Ask two questions in a row; the previous answer's speech should stop when
    the new question is submitted.
 6. Deny microphone access and confirm the `● microphone blocked` status.
-7. Check DevTools console with `window.__galaxy.voice()` to see the chosen
-   voice, and `window.__galaxy.speechSupported` /
-   `window.__galaxy.voiceInputSupported` for capability flags.
+7. Check DevTools console with `window.__ashra.voice()` to see the chosen
+   voice, and `window.__ashra.speechSupported` /
+   `window.__ashra.voiceInputSupported` for capability flags.
 
 ---
 
@@ -237,7 +253,7 @@ Test plan:
 - [x] Keep the spoken answer flowing while the camera moves.
 - [x] Reuse `focusNode()`, `clearFocus()`, and `startCameraFlight()`.
 
-Implementation note: `askJarvis()` still owns the single answer path. After a
+Implementation note: `askAshra()` still owns the single answer path. After a
 successful `/chat`, it renders source chips and calls `revealSources(data.nodes)`;
 voice and typed questions therefore behave identically.
 
@@ -245,13 +261,13 @@ voice and typed questions therefore behave identically.
 
 ## Phase 4 — The Personality (implemented in this pass)
 
-- [x] Move the persona and grounding rules into `brain/persona.py`.
+- [x] Move the persona and grounding rules into `ashra/persona.py`.
 - [x] Make the assistant a dry, polite British butler; use "sir" occasionally.
 - [x] Ask for two sentences of fact plus one short, understated dry line,
       capped at three sentences / 65 words, without reciting the note back.
 - [x] Handle small talk without retrieval or camera movement (`nodes: []`).
 - [x] Add a boot greeting using the real graph count:
-      `"Good evening, sir. 25 notes indexed, all present and accounted for."`
+      `"Good evening, sir. 26 notes indexed, all present and accounted for."`
 - [x] Keep the facts-only constraint from Phase 1; persona never overrides
       grounding.
 
@@ -292,7 +308,7 @@ what our pricing strategy is?" still goes to `/chat`.
 
 Implementation notes:
 
-- `brain/remember.py` owns validation, title/slug creation, related-note
+- `ashra/remember.py` owns validation, title/slug creation, related-note
   selection (`score_notes`), the `Related: [[Title]]` wikilink, the atomic
   rebuild, and the spoken confirmation.
 - `build.graph_payload()` is shared by `write_output()` and `/remember`, so the
@@ -314,7 +330,7 @@ happen along these seams:
 
 ### Provider abstraction
 
-Replace or extend `brain/providers.py`:
+Replace or extend `ashra/providers.py`:
 
 - OpenAI / local model / custom HTTP backend
 - streaming responses
@@ -323,7 +339,7 @@ Replace or extend `brain/providers.py`:
 
 ### Retrieval abstraction
 
-Replace `brain/retrieval.py` with:
+Replace `ashra/retrieval.py` with:
 
 - embeddings + vector store
 - hybrid keyword + semantic search
@@ -334,7 +350,7 @@ The `/chat` response can keep `nodes` as the source contract.
 
 ### Memory
 
-Replace `brain/sessions.py` with:
+Replace `ashra/sessions.py` with:
 
 - SQLite or JSON persistence
 - long-term user preferences
@@ -356,7 +372,7 @@ confirmation and a scope check.
 ### Voice and presence
 
 - cloned voice / TTS provider
-- wake word ("Jarvis…")
+- wake word ("A.S.H.R.A…")
 - true barge-in
 - optional HUD / reactor visualization
 - desktop or mobile shell if the browser is no longer enough
@@ -387,15 +403,20 @@ retrieval index, and memory are derived views, not the source of truth.
 config.json                 private key + model settings (git-ignored)
 config.example.json         safe placeholder template
 .gitignore                  keeps secrets, caches, and logs out of git
+pyproject.toml              package metadata + test configuration
+LICENSE                     MIT license
 server.py                   static viewer + POST /chat
 build.py                    markdown -> viewer/graph-data.js
-brain/
+ashra/
   __init__.py               package exports
   config.py                 config validation
   notes.py                  note loading
   retrieval.py              keyword scoring
   sessions.py               short conversation memory
-  providers.py              Anthropic provider + swap seam
+  providers.py              provider transports
+  persona.py                assistant tone + small talk
+  recall.py                 deterministic capture-history answers
+  remember.py               capture CRUD + graph rebuild
   chat.py                   answer pipeline + system prompt
 viewer/
   index.html                galaxy + chat bar
@@ -403,6 +424,8 @@ viewer/
   styles.css                cinematic UI + chat dock
   graph-data.js             generated graph data
 notes/                      private markdown knowledge base
+tests/                      unittest suite
+.github/workflows/ci.yml    GitHub Actions test matrix
 ```
 
 ---

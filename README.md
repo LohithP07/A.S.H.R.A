@@ -1,8 +1,8 @@
 # A.S.H.R.A
 
-A lightweight, local-host chatbot and note vault built on top of an LLM. It exposes a simple UI in `viewer/`, lets you store and query Markdown notes, and answers questions by searching those notes with an LLM.
+A.S.H.R.A is a local-first, note-grounded personal assistant. It exposes a simple UI in `viewer/`, lets you store and query Markdown notes, and answers questions by searching those notes with an LLM.
 
-Designed for personal or small-team use - no public endpoints, no external storage, only your machine.
+Designed for personal or small-team use - no public endpoints, no external storage, only your machine. The included `notes/` vault is a sample coffee-business knowledge base; replace it with your own.
 
 ## Installation
 
@@ -16,7 +16,7 @@ python -m venv .venv
 # source .venv/bin/activate  # macOS/Linux
 ```
 
-The project relies only on the Python standard library.
+The Python backend relies only on the standard library. The viewer loads Three.js and 3d-force-graph from a CDN.
 
 ## Configuration
 
@@ -24,13 +24,16 @@ The LLM provider is configured in `config.json`:
 
 ```json
 {
-  "provider": "deepseek",
-  "model": "deepseek-chat",
-  "key": "YOUR_API_KEY"
+  "provider": "openai_compatible",
+  "model": "YOUR_MODEL_ID",
+  "api_key": "YOUR_API_KEY",
+  "api_base": "https://your-provider.example/v1"
 }
 ```
 
-Copy `config.example.json` to `config.json` and fill in your key. Never commit secrets - `.gitignore` already skips it.
+Supported provider values are `anthropic`, `nvidia`, and `openai_compatible`. Use `openai_compatible` for providers that expose an OpenAI-style `/chat/completions` endpoint.
+
+Copy `config.example.json` to `config.json` and fill in your key. Never commit secrets - `.gitignore` already skips it. The server re-reads `config.json` on every request, so key and model changes do not require a restart.
 
 ## Running the app
 
@@ -68,13 +71,13 @@ Notes live as Markdown files under `notes/`. Example categories include:
 - `notes/customers/`
 - `notes/captures/` (generated when notes are created)
 
-Note filenames use this pattern:
+You can name ordinary notes however you like. Captures created through `/remember` are written as:
 
 ```text
-<timestamp-ms> - <slug-title> - <type>.md
+notes/captures/<slug>.md
 ```
 
-For example: `1699450960000 - summer-menu - product.md`. This keeps notes sortable and gives the UI a friendly title.
+Each capture contains simple frontmatter with `created` and `source`, an H1 title, the note body, and a `Related: [[Title]]` link when a related note is found.
 
 ## Features
 
@@ -82,7 +85,7 @@ For example: `1699450960000 - summer-menu - product.md`. This keeps notes sortab
 - Automatic graph generation: `build.py` produces `viewer/graph-data.js` from all notes.
 - Note CRUD through `/remember`, `/append`, `/rename`, and `/forget`.
 - Secure by design: local-only server, no open endpoints.
-- Configurable provider: swap between DeepSeek, OpenAI, Anthropic, and others via `config.json`.
+- Configurable provider: Anthropic, NVIDIA NIM, and any OpenAI-compatible endpoint via `config.json`.
 
 ## Development
 
@@ -90,8 +93,8 @@ For example: `1699450960000 - summer-menu - product.md`. This keeps notes sortab
 |------|---------|
 | Start the server | `python server.py` |
 | Rebuild the viewer index | `python build.py` |
-| Run tests (if added) | `pytest` |
-| Lint / format | `flake8` and `black` |
+| Run tests | `python -m unittest discover -v` |
+| Compile check | `python -m compileall -q ashra build.py server.py` |
 
 To add a new note category:
 
@@ -101,9 +104,9 @@ To add a new note category:
 ## Under the hood
 
 - `server.py` - HTTP server with custom routing, built on `http.server`.
-- `brain/chat.py` - `ChatService.ask()` parses the query, retrieves related notes, builds a graph, and calls the LLM.
-- `brain/remember.py` - captures, appends, renames, and deletes note files.
-- `brain/config.py` - loads and validates `config.json`.
+- `ashra/chat.py` - `ChatService.ask()` parses the query, retrieves related notes, builds a graph, and calls the LLM.
+- `ashra/remember.py` - captures, appends, renames, and deletes note files.
+- `ashra/config.py` - loads and validates `config.json`.
 - `viewer/` - static front-end assets.
 
 ## Contributing
@@ -113,7 +116,7 @@ To add a new note category:
 3. Add your changes and tests.
 4. Submit a pull request.
 
-All contributions should pass the current tests and style checks.
+All contributions should pass the test suite.
 
 ## License
 

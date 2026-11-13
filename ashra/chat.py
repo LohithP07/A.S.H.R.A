@@ -68,27 +68,28 @@ class ChatService:
                 model=config.model,
             )
 
-        if not config.configured:
-            raise NotConfiguredError(
-                "The brain is not configured. Paste your provider API key into "
-                "config.json, set the model, then reload."
-            )
-        if config.provider not in {"anthropic", "nvidia", "openai_compatible"}:
-            raise NotConfiguredError(
-                f"Provider '{config.provider}' is not implemented yet. "
-                "Use 'anthropic', 'nvidia', or 'openai_compatible'."
-            )
-
         reply = small_talk_reply(question)
         if reply is not None:
             # Small talk reuses the session id but never enters the note history,
-            # so a greeting cannot pollute later retrieval.
+            # so a greeting cannot pollute later retrieval. It also works before
+            # a provider key is configured, because it never calls the model.
             return ChatResult(
                 answer=reply,
                 nodes=[],
                 sources=[],
                 session_id=session_id,
                 model=config.model,
+            )
+
+        if not config.configured:
+            raise NotConfiguredError(
+                "A.S.H.R.A is not configured. Paste your provider API key into "
+                "config.json, set the model, then reload."
+            )
+        if config.provider not in {"anthropic", "nvidia", "openai_compatible"}:
+            raise NotConfiguredError(
+                f"Provider '{config.provider}' is not implemented yet. "
+                "Use 'anthropic', 'nvidia', or 'openai_compatible'."
             )
 
         self.sessions.max_messages = max(2, config.max_history)

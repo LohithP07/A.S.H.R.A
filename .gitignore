@@ -5,6 +5,13 @@ config.json
 # Python
 __pycache__/
 *.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Test and tool caches
+.pytest_cache/
+.ruff_cache/
 
 # Local server logs and test output
 server.out

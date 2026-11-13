@@ -104,6 +104,24 @@ class MemoryStoreTests(unittest.TestCase):
             {"preference", "fact"},
         )
 
+    def test_propose_from_statement_is_conservative(self) -> None:
+        self.assertEqual(
+            self.store.propose_from_statement("What coffee do I prefer?"),
+            [],
+        )
+        self.assertEqual(
+            self.store.propose_from_statement("I prefer dark roast coffee, what should I buy?"),
+            [],
+        )
+
+        proposals = self.store.propose_from_statement(
+            "I prefer dark roast coffee."
+        )
+
+        self.assertEqual(len(proposals), 1)
+        self.assertEqual(proposals[0]["kind"], "preference")
+        self.assertEqual(self.store.stats()["proposed"], 1)
+
     def test_remember_explicit_confirms_immediately(self) -> None:
         memories = self.store.remember_explicit(
             "Remember that our pricing is value based.",
@@ -238,6 +256,20 @@ class MemoryChatTests(unittest.TestCase):
         self.assertIn("dark roast", self.provider.system)
         self.assertEqual(result.sources[0]["kind"], "memory")
 
+    def test_explicit_remember_in_chat_confirms_without_the_model(self) -> None:
+        result = self.service().ask("Remember that our launch is on Friday.")
+
+        self.assertEqual(result.answer, "Noted. I'll remember that.")
+        self.assertEqual(self.provider.calls, 0)
+        self.assertEqual(self.store.stats()["confirmed"], 1)
+
+    def test_statement_in_chat_creates_a_proposal(self) -> None:
+        result = self.service().ask("I prefer dark roast coffee.")
+
+        self.assertEqual(self.provider.calls, 0)
+        self.assertEqual(self.store.stats()["proposed"], 1)
+        self.assertIn("proposed", result.answer)
+
 
 class MemoryApiTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -298,6 +330,42 @@ class MemoryApiTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["count"], 2)
         self.assertTrue(all(item["status"] == "proposed" for item in payload["memories"]))
+
+    def test_memory_remember_confirms_and_splits(self) -> None:
+        response = self.client.post(
+            "/memory/remember",
+            json={"text": "I prefer dark roast coffee. We ship on Fridays."},
+        )
+        payload = response.json()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["count"], 2)
+        self.assertTrue(all(item["status"] == "confirmed" for item in payload["memories"]))
+
+    def test_home_aggregates_brief_and_needs(self) -> None:
+        self.client.post(
+            "/memory/propose",
+            json={"text": "I prefer dark roast coffee."},
+        )
+        session_id = self.db.ensure_session()
+        self.db.append_exchange(session_id, "What is our pricing?", "Value based.")
+        approval_id = self.db.create_approval(
+            tool="vault_remember",
+            arguments={"text": "test"},
+            permission="act",
+            session_id=session_id,
+        )
+
+        response = self.client.get("/home")
+        home = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(home["needs_you"]["count"], 2)
+        self.assertEqual(home["needs_you"]["memories"][0]["kind"], "preference")
+        self.assertEqual(home["needs_you"]["approvals"][0]["id"], approval_id)
+        self.assertEqual(home["recent"]["sessions"][0]["id"], session_id)
+        self.assertEqual(home["recent"]["sessions"][0]["last_question"], "What is our pricing?")
+        self.assertIn("headline", home["brief"])
+        self.assertEqual(home["stats"]["proposed"], 1)
 
     def test_graph_and_timeline(self) -> None:
         for content in (

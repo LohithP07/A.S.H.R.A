@@ -107,6 +107,41 @@ _REMEMBER_PREFIX_RE = re.compile(
 _SENTENCE_RE = re.compile(r"(?<=[.!?])\s+|\n+")
 _WORD_RE = re.compile(r"[a-z0-9]+", re.IGNORECASE)
 
+# Automatic capture is deliberately conservative.  These patterns only fire
+# on first-person statements that usually carry a durable fact, preference, or
+# routine.  Questions and commands stay out of the proposal queue.
+_QUESTION_START_RE = re.compile(
+    r"^(?:what|how|why|when|where|who|whom|whose|which|"
+    r"do|does|did|is|are|was|were|can|could|should|would|will|"
+    r"have|has|tell|show|explain|list|find|search)\b",
+    re.IGNORECASE,
+)
+
+_STATEMENT_PATTERNS = (
+    re.compile(
+        r"\b(?:i|we)\s+(?:prefer|like|love|hate|dislike|avoid|want|need|"
+        r"always|never|usually|tend\s+to)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:i|we)\s+(?:work|live|am\s+based|are\s+based|grew\s+up|"
+        r"study|studied)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:my|our)\s+(?:name|birthday|timezone|email|phone|address|job|"
+        r"role|title|company|team|manager|wife|husband|partner|son|daughter|"
+        r"mother|father|doctor|allerg(?:y|ies)|pronouns?|diet|schedule)\b"
+        r"\s+(?:is|are|works?|lives?|prefers?|uses?)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:i|we)\s+(?:ship|deploy|release|meet|review|publish|invoice|"
+        r"pay|exercise|run|walk|check)\b.*\b(?:on|every|each|at)\b",
+        re.IGNORECASE,
+    ),
+)
+
 
 # ---------------------------------------------------------------------------
 # validation and normalisation
@@ -264,6 +299,32 @@ def split_memories(text: str) -> list[str]:
     if not pieces:
         pieces = [cleaned]
     return pieces[:MAX_PROPOSALS_PER_TEXT]
+
+
+def is_remember_request(text: str) -> bool:
+    """True when the user explicitly asked the assistant to remember something."""
+    cleaned = " ".join(str(text or "").split()).strip()
+    return bool(cleaned and _REMEMBER_PREFIX_RE.match(cleaned))
+
+
+def remember_body(text: str) -> str:
+    """Strip a leading "remember that …" phrase from a capture."""
+    return _REMEMBER_PREFIX_RE.sub("", " ".join(str(text or "").split())).strip()
+
+
+def is_memory_statement(text: str) -> bool:
+    """A conservative gate for automatic proposals.
+
+    The assistant should not turn every sentence into a memory.  This accepts
+    only durable first-person statements and rejects questions and commands.
+    """
+    cleaned = " ".join(str(text or "").split()).strip()
+    if len(cleaned) < 12 or cleaned.endswith("?"):
+        return False
+    if _QUESTION_START_RE.match(cleaned):
+        return False
+    return any(pattern.search(cleaned) for pattern in _STATEMENT_PATTERNS)
+
 
 
 # ---------------------------------------------------------------------------
@@ -498,6 +559,41 @@ class MemoryStore:
                 )
             )
         return proposals
+
+    def propose_from_statement(
+        self,
+        text: str,
+        *,
+        source: str = "chat",
+        source_ref: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Propose durable claims from an explicit user statement.
+
+        This is the automatic half of the capture loop: the user says
+        "I prefer …" or "we ship on …", and the assistant proposes a memory
+        instead of silently storing it.  Questions and commands are ignored.
+        """
+        cleaned = " ".join(str(text or "").split()).strip()
+        if not is_memory_statement(cleaned):
+            return []
+
+        proposals: list[dict[str, Any]] = []
+        for piece in split_memories(cleaned):
+            if not is_memory_statement(piece):
+                continue
+            try:
+                item = self.propose(
+                    piece,
+                    kind=infer_kind(piece, default="fact"),
+                    source=source,
+                    source_ref=source_ref,
+                )
+            except ValueError:
+                continue
+            if not item.get("duplicate"):
+                proposals.append(item)
+        return proposals
+
 
     def remember_explicit(
         self,

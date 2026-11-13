@@ -2,7 +2,7 @@
 
 A.S.H.R.A is a local-first personal assistant with a memory of its own. It answers from your Markdown notes and from typed, provenance-carrying memories, shows you its brain, and asks before it acts.
 
-Two surfaces ship today: the **Galaxy** (`/`) maps your notes as a 3D knowledge graph, and the **Brain** (`/brain.html`) lets you inspect, correct, and curate what the assistant remembers.
+Three surfaces ship today: **Home** (`/`) is the command deck where your brief, inbox, and quick capture live; the **Galaxy** (`/galaxy.html`) maps your notes as a 3D knowledge graph; and the **Brain** (`/brain.html`) lets you inspect, correct, and curate what the assistant remembers.
 
 Designed for personal or small-team use - no public endpoints, no external storage, only your machine. The included `notes/` vault is a sample coffee-business knowledge base; replace it with your own. Deleting the vault no longer erases everything the assistant knows: conversation and capture memory live in local SQLite.
 
@@ -53,7 +53,7 @@ python build.py
 python server.py
 ```
 
-Open a browser to http://127.0.0.1:4700/ for the Galaxy, or http://127.0.0.1:4700/brain.html for the Brain. Memory works without a provider key; chat needs one.
+Open a browser to http://127.0.0.1:4700/ for Home, http://127.0.0.1:4700/galaxy.html for the Galaxy, or http://127.0.0.1:4700/brain.html for the Brain. Memory and Home work without a provider key; chat needs one.
 
 ### API
 
@@ -61,7 +61,8 @@ Open a browser to http://127.0.0.1:4700/ for the Galaxy, or http://127.0.0.1:470
 |----------|--------|---------|-------|
 | `/health` | GET | - | Liveness, version, and server time |
 | `/status` | GET | - | Provider, vault, memory, session, tool, agent, and integration summary |
-| `/chat` | POST | `{ "question": "...", "session_id": "optional", "permission": "read" }` | Runs the tool loop; returns answer, sources, note ids, and any pending approval |
+| `/home` | GET | - | One aggregate read for Home: status, brief, Needs You inbox, recent memories, sessions, audit, and stats |
+| `/chat` | POST | `{ "question": "...", "session_id": "optional", "permission": "read" }` | Runs the tool loop; returns answer, sources, note ids, proposed memory ids, and any pending approval |
 | `/chat/stream` | POST | same as `/chat` | Server-sent events (`start`, `sources`, `tool_call`, `tool_result`, `approval_required`, `token`, `done`, `error`) |
 | `/remember` | POST | `{ "text": "...", "source": "typed" }` | Create a new capture |
 | `/append` | POST | `{ "text": "...", "last": true, "path": "note.md" }` | Append to an existing capture |
@@ -85,6 +86,7 @@ Open a browser to http://127.0.0.1:4700/ for the Galaxy, or http://127.0.0.1:470
 | `/memory/graph` | GET | `?status=&limit=500` | Memory nodes and shared-entity links |
 | `/memory/timeline` | GET | `?status=&limit=120` | Memories in chronological order |
 | `/memory/propose` | POST | `{ "text": "..." }` | Split text into atomic proposals |
+| `/memory/remember` | POST | `{ "text": "..." }` | Split text into atomic memories and confirm them immediately |
 | `/memory/ingest` | POST | - | Import notes as `document` memories |
 | `/memory/consolidate` | POST | - | Merge duplicates and decay stale records |
 | `/memory/{id}` | GET | - | One memory plus related memories |
@@ -111,13 +113,16 @@ proposed -> confirmed -> archived
 
 Kinds are `fact`, `preference`, `person`, `project`, `event`, `task`, `document`, `procedure`, and `observation`. Every record carries its source, confidence, sensitivity, reinforcement count, entities, and timestamps.
 
-- **Propose and confirm.** By default A.S.H.R.A proposes memories and waits for approval in the Brain's proposals inbox. An explicit "remember that …" capture is confirmed immediately.
+- **Propose and confirm.** By default A.S.H.R.A proposes memories and waits for approval in Home's Needs You queue or the Brain's proposals inbox. An explicit "remember that …" capture is confirmed immediately. A conservative detector also proposes durable first-person statements ("I prefer …", "we ship on …") while ignoring questions and commands.
+- **Quick capture.** Home's capture box can either propose or remember in one step, with an explicit kind. The Galaxy's answer card offers **Remember this**, which splits a long answer into atomic memories.
 - **Retrieval.** Search scores lexical overlap together with confidence, reinforcement, recency, and pinning. FTS5 is used when the local SQLite build supports it; otherwise the store falls back to a scored scan.
 - **Evidence.** Chat sources include memory records alongside notes, so an answer can show what it remembered and where that came from.
 - **Lifecycle.** Confirm, reject, edit, pin, archive, consolidate, and forget are first-class operations. Forgetting is permanent and requires confirmation.
 - **Health.** The Brain reports stale, orphaned, low-confidence, and duplicate records.
 - **Secrets are refused.** Credential-shaped text never enters memory.
 - **Notes are a connector.** Ingesting the vault creates `document` memories with a stable `notes/...` reference. Deleting the vault leaves conversation and capture memory intact.
+
+The **Home** hub at `/` is the control surface: a daily brief, a Needs You queue for proposed memories and pending approvals, quick capture, recent threads, recently confirmed memories, and recent activity, plus a Ctrl+K command palette.
 
 The **Brain** at `/brain.html` exposes three synchronized views over the same data: a force-directed **Graph** of shared entities, a **Timeline** of when memories arrived, and a **Library** with search, filters, provenance, and lifecycle actions.
 
@@ -233,8 +238,10 @@ Each capture contains simple frontmatter with `created` and `source`, an H1 titl
 ## Features
 
 - Chat with your notes and memory: `POST /chat` retrieves both, then asks the LLM.
+- Home hub: a daily brief, Needs You queue, quick capture, recent threads, and recent activity in one aggregate read.
 - Typed long-term memory with a propose/confirm lifecycle, provenance, and hybrid-ready retrieval.
 - The Brain: graph, timeline, and library views with a proposals inbox and confirm/reject/pin/edit/forget actions.
+- Automatic memory proposals for durable first-person statements, plus one-click "Remember this" on answers.
 - Note ingestion into memory, so the vault is a source rather than the substrate.
 - Tool-calling loop: the assistant can search and read the vault and memory on its own, then answer.
 - Scoped subagents: delegate to `researcher`, `writer`, or `operator` with permission ceilings and tool allowlists.
@@ -279,7 +286,7 @@ To add a new note category:
 - `ashra/mcp_server.py` - optional read-only MCP server for the notes vault.
 - `ashra/remember.py` - captures, appends, renames, and deletes note files.
 - `ashra/config.py` - loads and validates `config.json`.
-- `viewer/` - static front-end assets: Galaxy (`index.html`, `app.js`) and Brain (`brain.html`, `brain.js`).
+- `viewer/` - static front-end assets: Home (`index.html`, `home.css`, `home.js`), Galaxy (`galaxy.html`, `app.js`, `styles.css`), and Brain (`brain.html`, `brain.js`, `brain.css`).
 
 ## Contributing
 

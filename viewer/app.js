@@ -982,6 +982,9 @@
   const chatApprovalText = $('chat-approval-text');
   const chatApprove = $('chat-approve');
   const chatDeny = $('chat-deny');
+  const chatCardActions = $('chat-card-actions');
+  const chatRemember = $('chat-remember');
+  const chatRememberNote = $('chat-remember-note');
 
   function readSessionId() {
     try {
@@ -1008,6 +1011,7 @@
 
   let chatSessionId = readSessionId();
   let pendingApproval = null;
+  let lastAnswerText = '';
 
   function setChatStatus(text, kind = '') {
     if (!chatStatus) return;
@@ -1071,12 +1075,24 @@
     });
   }
 
-  function showChatCard(text, sources, isError = false) {
+  function showChatCard(text, sources, isError = false, canRemember = true) {
     if (!chatCard || !chatAnswer || !chatSources) return;
     chatAnswer.textContent = text;
     renderSources(sources);
     chatCard.classList.toggle('error', isError);
     chatCard.hidden = false;
+    lastAnswerText = isError ? '' : text;
+    setRememberAvailable(!isError && Boolean(text) && canRemember);
+  }
+
+  function setRememberAvailable(available) {
+    if (!chatCardActions || !chatRemember) return;
+    chatCardActions.hidden = !available;
+    if (!available) return;
+    chatRemember.disabled = false;
+    chatRemember.classList.remove('saved');
+    chatRemember.textContent = 'Remember this';
+    if (chatRememberNote) chatRememberNote.textContent = '';
   }
 
   function beginChatCard() {
@@ -1085,6 +1101,8 @@
     chatSources.replaceChildren();
     chatCard.classList.remove('error');
     chatCard.hidden = false;
+    lastAnswerText = '';
+    setRememberAvailable(false);
     clearApproval();
   }
 
@@ -1164,7 +1182,7 @@
       const answer = data && typeof data.answer === 'string' && data.answer
         ? data.answer
         : 'Done.';
-      showChatCard(answer, (data && data.sources) || [], false);
+      showChatCard(answer, (data && data.sources) || [], false, false);
       revealSources((data && data.nodes) || []);
       setChatStatus(CHAT_HINT);
       speakAnswer(answer);
@@ -1678,7 +1696,7 @@
         ? data.reply
         : `Noted, sir. "${data.title}" is in the vault.`;
 
-      showChatCard(reply, sources, false);
+      showChatCard(reply, sources, false, false);
       setChatStatus(CHAT_HINT);
       speakAnswer(reply);
     } catch (error) {
@@ -1691,6 +1709,52 @@
       setChatStatus('● vault offline', 'error');
     } finally {
       setChatBusy(false);
+    }
+  }
+
+  async function rememberAnswer() {
+    const text = String(lastAnswerText || '').trim();
+    if (!text || !chatRemember) return;
+
+    chatRemember.disabled = true;
+    if (chatRememberNote) chatRememberNote.textContent = 'saving…';
+
+    try {
+      const response = await fetch('/memory/remember', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          source: 'chat',
+          source_ref: chatSessionId || null
+        })
+      });
+
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (error) {
+        data = null;
+      }
+
+      if (!response.ok) {
+        const detail = data && (data.detail || data.error);
+        throw new Error(detail || `Memory returned HTTP ${response.status}.`);
+      }
+
+      const count = Number((data && data.count) || 0);
+      chatRemember.classList.add('saved');
+      chatRemember.textContent = 'Remembered';
+      if (chatRememberNote) {
+        chatRememberNote.textContent = count
+          ? `${count} ${count === 1 ? 'memory' : 'memories'} saved`
+          : 'Saved';
+      }
+      setChatStatus(CHAT_HINT);
+    } catch (error) {
+      chatRemember.disabled = false;
+      if (chatRememberNote) chatRememberNote.textContent = 'could not save';
+      setChatStatus('● memory offline', 'error');
     }
   }
 
@@ -1781,6 +1845,10 @@
             }
             renderSources(sources);
             revealSources(nodes);
+            if (!pending && answer) {
+              lastAnswerText = answer;
+              setRememberAvailable(true);
+            }
           } else if (event.event === 'error') {
             throw new Error(event.detail || event.error || 'A.S.H.R.A could not answer.');
           }
@@ -1903,6 +1971,9 @@
   }
   if (chatDeny) {
     chatDeny.addEventListener('click', () => decideApproval(false));
+  }
+  if (chatRemember) {
+    chatRemember.addEventListener('click', rememberAnswer);
   }
 
   if (chatMic) {

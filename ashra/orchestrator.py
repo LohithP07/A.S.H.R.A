@@ -47,6 +47,7 @@ class OrchestratorResult:
     tools: tuple[dict[str, Any], ...] = ()
     pending: dict[str, Any] | None = None
     status: str = "ok"
+    proposal_ids: tuple[str, ...] = ()
 
     def as_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -61,6 +62,8 @@ class OrchestratorResult:
         }
         if self.pending is not None:
             payload["pending_approval"] = self.pending
+        if self.proposal_ids:
+            payload["memories_proposed"] = list(self.proposal_ids)
         return payload
 
 
@@ -102,7 +105,13 @@ class Orchestrator:
             return
 
         if not prepared.matches and not prepared.memories:
-            answer = "I don't have a note or memory that covers that."
+            if prepared.proposals:
+                answer = (
+                    "I don't have a note or memory that covers that, but I've "
+                    "proposed it as a memory for your approval."
+                )
+            else:
+                answer = "I don't have a note or memory that covers that."
             self.chat.sessions.append_exchange(prepared.session_id, prepared.question, answer)
             yield from self.chat._stream_result(
                 ChatResult(
@@ -111,6 +120,7 @@ class Orchestrator:
                     sources=[],
                     session_id=prepared.session_id,
                     model=prepared.config.model,
+                    proposals=prepared.proposals,
                 )
             )
             return
@@ -289,6 +299,7 @@ class Orchestrator:
             "granted": granted,
             "approved_calls": set(),
             "tool_log": [],
+            "proposals": list(prepared.proposals),
             "approval_id": None,
         }
 
@@ -354,6 +365,7 @@ class Orchestrator:
             "granted": parse_permission(payload.get("granted")),
             "approved_calls": set(payload.get("approved_calls") or []),
             "tool_log": list(payload.get("tool_log") or []),
+            "proposals": list(payload.get("proposals") or []),
             "approval_id": None,
         }
 
@@ -384,6 +396,7 @@ class Orchestrator:
             "granted": state["granted"].value,
             "approved_calls": sorted(state["approved_calls"]),
             "tool_log": state["tool_log"],
+            "proposals": state.get("proposals", []),
         }
 
     # ------------------------------------------------------------------
@@ -636,6 +649,11 @@ class Orchestrator:
             "model": state["model"],
             "steps": state["step"],
             "tools": list(state["tool_log"]),
+            "memories_proposed": [
+                item.get("id")
+                for item in state.get("proposals", [])
+                if isinstance(item, dict)
+            ],
         }
 
     @staticmethod
@@ -654,6 +672,7 @@ class Orchestrator:
             tools=tuple(done.get("tools") or ()),
             pending=done.get("pending_approval"),
             status=str(done.get("status") or "ok"),
+            proposal_ids=tuple(done.get("memories_proposed") or ()),
         )
 
 

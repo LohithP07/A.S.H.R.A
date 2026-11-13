@@ -75,7 +75,7 @@ from .remember import rename as rename_capture
 from .sessions import SESSION_RE
 from .tools import Permission, ToolRegistry, build_default_registry, parse_permission
 
-VERSION = "0.6.0"
+VERSION = "0.7.0"
 MAX_BODY_BYTES = 64 * 1024
 BLOCKED_NAMES = {"config.json", ".env", ".git"}
 
@@ -137,6 +137,12 @@ class MemoryCreate(BaseModel):
 
 
 class MemoryPropose(BaseModel):
+    text: str = ""
+    source: str = "manual"
+    source_ref: str | None = None
+
+
+class MemoryRemember(BaseModel):
     text: str = ""
     source: str = "manual"
     source_ref: str | None = None
@@ -445,6 +451,63 @@ def create_app(
             "viewer": str(viewer),
         }
 
+    @app.get("/home")
+    def home() -> dict[str, Any]:
+        """One aggregate read for the Home hub: brief, inbox, and recents."""
+        db.expire_approvals()
+        stats = memory_store.stats()
+        proposals = memory_store.list(status="proposed", limit=12)
+        approvals = db.list_approvals(status="pending", limit=12)
+        needs = len(proposals) + len(approvals)
+
+        if needs:
+            parts: list[str] = []
+            if proposals:
+                label = "memory proposal" if len(proposals) == 1 else "memory proposals"
+                parts.append(f"{len(proposals)} {label}")
+            if approvals:
+                label = "pending action" if len(approvals) == 1 else "pending actions"
+                parts.append(f"{len(approvals)} {label}")
+            headline = (
+                "One thing needs you."
+                if needs == 1
+                else f"{needs} things need you."
+            )
+            detail = "Review " + " and ".join(parts) + "."
+        else:
+            headline = "Nothing needs you right now."
+            detail = (
+                f"The brain holds {stats['confirmed']} confirmed "
+                f"{'memory' if stats['confirmed'] == 1 else 'memories'} "
+                f"across {len(stats['by_kind'])} "
+                f"{'kind' if len(stats['by_kind']) == 1 else 'kinds'}. "
+                "Capture something new or ask the Galaxy a question."
+            )
+
+        return {
+            "status": status(),
+            "brief": {
+                "headline": headline,
+                "detail": detail,
+                "needs": needs,
+                "generated_at": time.time(),
+            },
+            "needs_you": {
+                "memories": proposals,
+                "approvals": approvals,
+                "count": needs,
+            },
+            "recent": {
+                "memories": memory_store.timeline(status="confirmed", limit=8),
+                "sessions": db.recent_sessions(limit=8),
+                "audit": [
+                    {key: value for key, value in event.items() if key != "detail"}
+                    for event in db.list_audit(limit=10)
+                ],
+            },
+            "stats": stats,
+        }
+
     # ------------------------------------------------------------------
     # chat
     # ------------------------------------------------------------------
@@ -473,6 +536,9 @@ def create_app(
                     "sources": plain.sources,
                     "session_id": plain.session_id,
                     "model": plain.model,
+                    "memories_proposed": [
+                        item.get("id") for item in plain.proposals
+                    ],
                 }
         except Exception as exc:
             db.record_audit(
@@ -501,6 +567,7 @@ def create_app(
                 "model": payload.get("model"),
                 "chars": len(str(payload.get("answer") or "")),
                 "tools": [item.get("name") for item in payload.get("tools", [])],
+                "memories_proposed": payload.get("memories_proposed", []),
             },
         )
         return payload
@@ -543,6 +610,7 @@ def create_app(
                                 for item in event.get("tools", [])
                                 if isinstance(item, dict)
                             ],
+                            "memories_proposed": event.get("memories_proposed", []),
                         }
                     yield _sse(event)
             except Exception as exc:
@@ -776,6 +844,24 @@ def create_app(
         db.record_audit(
             "memory",
             "propose",
+            request_id=_request_id(request),
+            detail={"count": len(items), "ids": [item.get("id") for item in items]},
+        )
+        return {"memories": items, "count": len(items)}
+
+    @app.post("/memory/remember")
+    def remember_memory(body: MemoryRemember, request: Request) -> Any:
+        try:
+            items = memory_store.remember_explicit(
+                body.text,
+                source=body.source,
+                source_ref=body.source_ref,
+            )
+        except ValueError as exc:
+            return _error(400, "bad_memory", str(exc))
+        db.record_audit(
+            "memory",
+            "remember",
             request_id=_request_id(request),
             detail={"count": len(items), "ids": [item.get("id") for item in items]},
         )

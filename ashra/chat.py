@@ -20,7 +20,7 @@ from typing import Any
 
 from .config import AppConfig, load_config
 from .errors import NotConfiguredError
-from .memory import MemoryStore
+from .memory import MemoryStore, is_remember_request, remember_body
 from .notes import Note, load_notes
 from .persona import compose_system_prompt, small_talk_reply
 from .providers import ChatProvider, make_provider
@@ -36,6 +36,7 @@ class ChatResult:
     sources: list[dict[str, object]]
     session_id: str
     model: str
+    proposals: tuple[dict[str, Any], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -48,6 +49,7 @@ class Prepared:
     history: list[dict[str, str]]
     matches: list[ScoredNote]
     memories: tuple[dict[str, Any], ...] = ()
+    proposals: tuple[dict[str, Any], ...] = ()
     immediate: ChatResult | None = None
 
 
@@ -92,6 +94,39 @@ class ChatService:
         config = load_config(self.config_path)
         session_id = self.sessions.ensure(session_id)
 
+        if self.memory is not None and is_remember_request(question):
+            body = remember_body(question)
+            remembered: list[dict[str, Any]] = []
+            if not body:
+                answer = "Tell me what to remember."
+            else:
+                try:
+                    remembered = self.memory.remember_explicit(
+                        body,
+                        source="chat",
+                        source_ref=session_id,
+                    )
+                except ValueError as exc:
+                    answer = f"I couldn't store that in memory: {exc}"
+                else:
+                    answer = "Noted. I'll remember that."
+            self.sessions.append_exchange(session_id, question, answer)
+            return _Prepared(
+                question=question,
+                session_id=session_id,
+                config=config,
+                history=[],
+                matches=[],
+                immediate=ChatResult(
+                    answer=answer,
+                    nodes=[],
+                    sources=[],
+                    session_id=session_id,
+                    model=config.model,
+                    proposals=tuple(remembered),
+                ),
+            )
+
         notes = self.notes_loader()
         recall = recall_reply(notes, question)
         if recall is not None:
@@ -133,6 +168,16 @@ class ChatService:
                 ),
             )
 
+        proposals: tuple[dict[str, Any], ...] = ()
+        if self.memory is not None:
+            proposals = tuple(
+                self.memory.propose_from_statement(
+                    question,
+                    source="chat",
+                    source_ref=session_id,
+                )
+            )
+
         if not config.configured:
             raise NotConfiguredError(
                 "A.S.H.R.A is not configured. Paste your provider API key into "
@@ -172,6 +217,7 @@ class ChatService:
             history=history,
             matches=matches,
             memories=memories,
+            proposals=proposals,
         )
 
     @staticmethod
@@ -211,7 +257,13 @@ class ChatService:
             return prepared.immediate
 
         if not prepared.matches and not prepared.memories:
-            answer = "I don't have a note or memory that covers that."
+            if prepared.proposals:
+                answer = (
+                    "I don't have a note or memory that covers that, but I've "
+                    "proposed it as a memory for your approval."
+                )
+            else:
+                answer = "I don't have a note or memory that covers that."
             self.sessions.append_exchange(prepared.session_id, prepared.question, answer)
             return ChatResult(
                 answer=answer,
@@ -219,6 +271,7 @@ class ChatService:
                 sources=[],
                 session_id=prepared.session_id,
                 model=prepared.config.model,
+                proposals=prepared.proposals,
             )
 
         system = build_system_prompt(
@@ -239,6 +292,7 @@ class ChatService:
             sources=self._sources(prepared.matches, prepared.memories),
             session_id=prepared.session_id,
             model=prepared.config.model,
+            proposals=prepared.proposals,
         )
 
     # ------------------------------------------------------------------
@@ -261,7 +315,13 @@ class ChatService:
             return
 
         if not prepared.matches and not prepared.memories:
-            answer = "I don't have a note or memory that covers that."
+            if prepared.proposals:
+                answer = (
+                    "I don't have a note or memory that covers that, but I've "
+                    "proposed it as a memory for your approval."
+                )
+            else:
+                answer = "I don't have a note or memory that covers that."
             self.sessions.append_exchange(prepared.session_id, prepared.question, answer)
             yield from self._stream_result(
                 ChatResult(
@@ -270,6 +330,7 @@ class ChatService:
                     sources=[],
                     session_id=prepared.session_id,
                     model=prepared.config.model,
+                    proposals=prepared.proposals,
                 )
             )
             return
@@ -300,6 +361,7 @@ class ChatService:
             "sources": sources,
             "session_id": prepared.session_id,
             "model": prepared.config.model,
+            "memories_proposed": [item.get("id") for item in prepared.proposals],
         }
 
     def _stream_result(self, result: ChatResult) -> Iterator[dict[str, object]]:
@@ -317,6 +379,7 @@ class ChatService:
             "sources": result.sources,
             "session_id": result.session_id,
             "model": result.model,
+            "memories_proposed": [item.get("id") for item in result.proposals],
         }
 
 

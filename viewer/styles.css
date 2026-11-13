@@ -298,6 +298,42 @@ a.ghost-btn { display: inline-flex; align-items: center; text-decoration: none; 
   background: rgba(73, 54, 118, 0.4);
 }
 
+.chat-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid rgba(151, 174, 207, 0.1);
+}
+.chat-card-actions[hidden] { display: none; }
+.chat-remember {
+  padding: 5px 11px;
+  border: 1px solid rgba(167, 139, 250, 0.28);
+  border-radius: 999px;
+  background: rgba(18, 25, 39, 0.62);
+  color: #c9b8ff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: color 200ms ease, border-color 200ms ease, background 200ms ease;
+}
+.chat-remember:hover:not(:disabled) {
+  color: #fff;
+  border-color: rgba(183, 163, 255, 0.6);
+  background: rgba(73, 54, 118, 0.45);
+}
+.chat-remember:disabled { opacity: 0.45; cursor: wait; }
+.chat-remember.saved { color: #a7f3d0; border-color: rgba(52, 211, 153, 0.35); }
+.chat-remember-note {
+  color: #75849a;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .chat-approval {
   margin: 12px 0 0;
   padding-top: 11px;

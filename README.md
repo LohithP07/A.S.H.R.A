@@ -16,7 +16,13 @@ python -m venv .venv
 # source .venv/bin/activate  # macOS/Linux
 ```
 
-The Python backend relies only on the standard library. The viewer loads Three.js and 3d-force-graph from a CDN.
+Install the backend dependencies:
+
+```bash
+python -m pip install -e ".[dev]"
+```
+
+The core API uses FastAPI and Uvicorn. The optional MCP filesystem server uses the MCP SDK, which is included in the `dev` extra. The viewer loads Three.js and 3d-force-graph from a CDN.
 
 ## Configuration
 
@@ -51,13 +57,48 @@ Open a browser to http://127.0.0.1:4700/ to see the A.S.H.R.A UI.
 
 | Endpoint | Method | Payload | Notes |
 |----------|--------|---------|-------|
-| `/chat` | POST | `{ "question": "...", "session_id": "optional" }` | Ask the LLM; returns answer and note graph |
-| `/remember` | POST | `{ "text": "...", "source": "typed" }` | Create a new note |
-| `/append` | POST | `{ "text": "...", "last": true, "path": "note.md" }` | Append to an existing note |
-| `/rename` | POST | `{ "title": "New title", "last": true, "path": "note.md" }` | Rename a note |
-| `/forget` | POST | `{ "last": true, "path": "note.md", "confirm": true }` | Delete a note - requires confirmation |
+| `/health` | GET | - | Liveness, version, and server time |
+| `/status` | GET | - | Provider, vault, session, and tool summary |
+| `/chat` | POST | `{ "question": "...", "session_id": "optional" }` | Ask the LLM; returns answer, sources, and note ids |
+| `/chat/stream` | POST | `{ "question": "...", "session_id": "optional" }` | Same answer as server-sent events (`start`, `sources`, `token`, `done`, `error`) |
+| `/remember` | POST | `{ "text": "...", "source": "typed" }` | Create a new capture |
+| `/append` | POST | `{ "text": "...", "last": true, "path": "note.md" }` | Append to an existing capture |
+| `/rename` | POST | `{ "title": "New title", "last": true, "path": "note.md" }` | Rename a capture |
+| `/forget` | POST | `{ "last": true, "path": "note.md", "confirm": true }` | Delete a capture - requires confirmation |
+| `/sessions/{id}` | GET | - | Persisted conversation history for one session |
+| `/tools` | GET | `?permission=read` | Tools available at a permission level |
+| `/tools/invoke` | POST | `{ "name": "...", "arguments": {}, "permission": "read", "approved": false }` | Invoke a tool through the permission gate |
+| `/audit` | GET | `?limit=50&event=chat` | Recent audit events |
+| `/rebuild` | POST | - | Rebuild `viewer/graph-data.js` from the notes vault |
 
-All responses are JSON. The server only serves files inside `viewer/`; requests for `config.json`, `.env`, or `.git` are blocked.
+All responses are JSON except `/chat/stream`, which uses `text/event-stream`. The server only serves files inside `viewer/`; requests for `config.json`, `.env`, or `.git` are blocked. Every response includes an `X-Request-ID` header.
+
+### Persistence and audit
+
+Conversations and audit events live in `data/ashra.db` (SQLite, git-ignored). The database stores sessions, messages, and audit events for chat, vault, and tool actions. The in-memory `SessionStore` remains available for tests and scripts; the API injects the SQLite-backed store.
+
+### Tools and permissions
+
+Tools declare a permission tier and whether they need approval:
+
+| Tier | Meaning |
+|------|---------|
+| `read` | Inspect notes or files |
+| `draft` | Prepare text without sending it |
+| `act` | Change local state |
+| `admin` | Destructive or configuration-level work |
+
+The default tool pack is `fs_list`, `fs_read`, and `fs_search`, scoped to `notes/`. `vault_remember` and `vault_append` require `act` permission plus `approved: true`. Paths cannot escape the vault, and blocked names such as `config.json`, `.env`, and `.git` are never exposed.
+
+### MCP filesystem server
+
+The same scoped reads are available over MCP stdio:
+
+```bash
+python -m ashra.mcp_server --root notes
+# or, after installation:
+ashra-mcp-filesystem --root notes
+```
 
 ## Notes vault
 
@@ -82,19 +123,25 @@ Each capture contains simple frontmatter with `created` and `source`, an H1 titl
 ## Features
 
 - Chat with your notes: `POST /chat` builds a graph of related notes and asks the LLM.
+- Streaming answers: `POST /chat/stream` sends sources first, then word-sized tokens.
 - Automatic graph generation: `build.py` produces `viewer/graph-data.js` from all notes.
 - Note CRUD through `/remember`, `/append`, `/rename`, and `/forget`.
-- Secure by design: local-only server, no open endpoints.
+- Durable sessions and an audit log in local SQLite.
+- Permissioned tools with approval gates for writes.
+- Optional scoped filesystem MCP server.
+- Secure by design: local-only server, no open endpoints, no keys in responses or logs.
 - Configurable provider: Anthropic, NVIDIA NIM, and any OpenAI-compatible endpoint via `config.json`.
 
 ## Development
 
 | Task | Command |
 |------|---------|
+| Install for development | `python -m pip install -e ".[dev]"` |
 | Start the server | `python server.py` |
 | Rebuild the viewer index | `python build.py` |
-| Run tests | `python -m unittest discover -v` |
+| Run tests | `python -m pytest -q` or `python -m unittest discover -v` |
 | Compile check | `python -m compileall -q ashra build.py server.py` |
+| Run the MCP filesystem server | `python -m ashra.mcp_server --root notes` |
 
 To add a new note category:
 
@@ -103,8 +150,12 @@ To add a new note category:
 
 ## Under the hood
 
-- `server.py` - HTTP server with custom routing, built on `http.server`.
-- `ashra/chat.py` - `ChatService.ask()` parses the query, retrieves related notes, builds a graph, and calls the LLM.
+- `server.py` - Uvicorn entrypoint and startup banner.
+- `ashra/api.py` - FastAPI routes, SSE streaming, request IDs, and error mapping.
+- `ashra/chat.py` - `ChatService.ask()` and `ChatService.stream()` share retrieval and provider logic.
+- `ashra/db.py` - SQLite sessions, messages, and audit events.
+- `ashra/tools.py` - permission tiers, tool registry, and scoped filesystem tools.
+- `ashra/mcp_server.py` - optional read-only MCP server for the notes vault.
 - `ashra/remember.py` - captures, appends, renames, and deletes note files.
 - `ashra/config.py` - loads and validates `config.json`.
 - `viewer/` - static front-end assets.

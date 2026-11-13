@@ -12,8 +12,24 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
+from typing import Protocol
 
 SESSION_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+
+
+class SessionBackend(Protocol):
+    """The small surface ChatService needs from a conversation store."""
+
+    max_messages: int
+
+    def ensure(self, session_id: str | None = None) -> str:
+        ...
+
+    def history(self, session_id: str) -> list[dict[str, str]]:
+        ...
+
+    def append_exchange(self, session_id: str, user: str, assistant: str) -> None:
+        ...
 
 
 @dataclass

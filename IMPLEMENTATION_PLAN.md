@@ -58,7 +58,7 @@ extension, not a rewrite.
       the HTTP server.
 - [x] Add a GitHub Actions CI workflow.
 - [x] Add `pyproject.toml`, `LICENSE`, and development tooling metadata.
-- [x] Keep the Python backend dependency-free.
+- [x] Keep the Phase 0 backend dependency-free.
 
 ---
 
@@ -73,8 +73,9 @@ extension, not a rewrite.
 3. **Keep the browser contract stable.** The viewer only knows
    `POST /chat -> {answer, nodes, sources, session_id}`. New backends, tools, or
    models should preserve that shape where possible.
-4. **Prefer stdlib until a dependency earns its place.** The current assistant uses
-   only `urllib` and the standard library.
+4. **Prefer stdlib until a dependency earns its place.** Phase 0 stayed
+   dependency-free. Phase 1 added FastAPI/Uvicorn for the API and SQLite (still
+   stdlib) for persistence; the MCP SDK remains optional.
 5. **Ground answers in notes.** The system prompt forbids outside knowledge and
    requires the assistant to admit when the notes do not cover a question.
 
@@ -85,25 +86,52 @@ extension, not a rewrite.
 ```text
 viewer/ (public)
   index.html
-  app.js  ── POST /chat ──┐
+  app.js  ── POST /chat, /chat/stream ──┐
   styles.css              │
                           ▼
-server.py (local HTTP) ── ashra/chat.py
+server.py (Uvicorn) ── ashra/api.py ── ashra/chat.py
                              ├── notes.py      load + clean markdown
                              ├── retrieval.py  keyword scoring -> top 6
-                             ├── sessions.py   short in-memory history
-                             ├── providers.py  Anthropic / NVIDIA NIM (swap target)
+                             ├── sessions.py   store protocol + in-memory
+                             ├── db.py         SQLite sessions + audit
+                             ├── tools.py      permissions + registry
+                             ├── providers.py  Anthropic / NVIDIA NIM
                              └── config.py     config.json validation
-                          │
-                          ▼
-                 model provider (Anthropic or NVIDIA NIM)
+
+ashra/mcp_server.py ── scoped read-only filesystem tools
 ```
 
 `config.json` and `notes/` stay outside the served tree.
 
 ---
 
-## Phase 1 — The Assistant (current)
+## Phase 1 — Foundation (complete)
+
+- [x] Replace the standard-library HTTP server with FastAPI + Uvicorn while
+      keeping `python server.py` as the entrypoint.
+- [x] Preserve `/chat`, `/remember`, `/append`, `/rename`, `/forget`, and static
+      viewer serving.
+- [x] Add `/health`, `/status`, `/chat/stream` (SSE), `/sessions/{id}`,
+      `/tools`, `/tools/invoke`, `/audit`, and `/rebuild`.
+- [x] Add request IDs, structured request logging, payload limits, and blocked
+      secret paths.
+- [x] Add SQLite persistence for sessions, messages, and audit events in
+      `data/ashra.db`.
+- [x] Inject `SQLiteSessionStore` into `ChatService` behind the existing
+      `ensure` / `history` / `append_exchange` contract.
+- [x] Add permission tiers (`read`, `draft`, `act`, `admin`), a tool registry,
+      schema validation, and approval gates.
+- [x] Add scoped filesystem tools (`fs_list`, `fs_read`, `fs_search`) rooted at
+      `notes/`, with traversal and blocked-name protection.
+- [x] Add approval-gated `vault_remember` and `vault_append` tools.
+- [x] Add an optional read-only MCP filesystem server compatible with MCP 1.x
+      and 2.x.
+- [x] Stream answers in the viewer over SSE with a `/chat` fallback.
+- [x] Add tests for the API, database, tools, MCP server, and streaming.
+
+---
+
+## Phase 1B — The Assistant (current)
 
 ### 1. Configuration
 
@@ -155,8 +183,10 @@ server.py (local HTTP) ── ashra/chat.py
 - [x] Client sends a `session_id`; server creates/validates one.
 - [x] Keep the last 8 messages by default (about 4 turns).
 - [x] Include history in the provider message list so follow-ups work.
-- [ ] Future: replace with persistent memory (SQLite/JSON) behind the same
+- [x] Persist sessions and messages in SQLite behind the same
       `ensure`, `history`, and `append_exchange` methods.
+- [x] Keep the in-memory store for tests and scripts.
+- [ ] Future: add export/backup and per-session deletion commands.
 
 ### 6. `POST /chat`
 
@@ -166,6 +196,9 @@ server.py (local HTTP) ── ashra/chat.py
 - [x] Map errors to `400` / `500` / `502` / `503` with JSON details.
 - [x] Do not log request bodies or secrets.
 - [x] Keep `GET` static serving for the viewer.
+- [x] Add `POST /chat/stream` with `start`, `sources`, `token`, `done`, and
+      `error` SSE events.
+- [x] Record chat outcomes in the audit log.
 
 ### 7. Viewer chat UI
 
@@ -405,19 +438,24 @@ config.example.json         safe placeholder template
 .gitignore                  keeps secrets, caches, and logs out of git
 pyproject.toml              package metadata + test configuration
 LICENSE                     MIT license
-server.py                   static viewer + POST /chat
+server.py                   Uvicorn entrypoint + startup banner
 build.py                    markdown -> viewer/graph-data.js
 ashra/
   __init__.py               package exports
+  api.py                    FastAPI routes, SSE, request IDs, error mapping
   config.py                 config validation
+  db.py                     SQLite sessions, messages, audit events
   notes.py                  note loading
   retrieval.py              keyword scoring
-  sessions.py               short conversation memory
+  sessions.py               conversation-store protocol + in-memory store
   providers.py              provider transports
   persona.py                assistant tone + small talk
   recall.py                 deterministic capture-history answers
   remember.py               capture CRUD + graph rebuild
-  chat.py                   answer pipeline + system prompt
+  tools.py                  permission tiers + tool registry + scoped filesystem
+  mcp_server.py             optional read-only MCP filesystem server
+  chat.py                   answer + streaming pipeline
+data/                       local SQLite database (git-ignored)
 viewer/
   index.html                galaxy + chat bar
   app.js                    graph, camera, chat UI
@@ -434,9 +472,12 @@ tests/                      unittest suite
 
 ```bash
 cd path/to/A.S.H.R.A
+python -m pip install -e ".[dev]"
 python build.py          # after notes change
 python server.py         # http://127.0.0.1:4700/
 ```
+
+The interactive API docs are at `http://127.0.0.1:4700/api/docs`.
 
 Then:
 

@@ -108,6 +108,47 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(result.nodes, [])
         self.assertEqual(self.provider.calls, 0)
 
+    def test_stream_emits_sources_tokens_and_done(self) -> None:
+        self.write_config()
+        note = make_note(1, "Pricing Strategy", "Our pricing strategy is value based.")
+        events = list(self.service([note]).stream("What is our pricing strategy?"))
+
+        names = [event["event"] for event in events]
+        self.assertEqual(names[0], "start")
+        self.assertIn("sources", names)
+        self.assertIn("token", names)
+        self.assertEqual(names[-1], "done")
+
+        answer = "".join(
+            str(event["text"]) for event in events if event["event"] == "token"
+        )
+        self.assertEqual(answer.strip(), "Grounded answer.")
+        self.assertEqual(events[-1]["nodes"], [1])
+        self.assertEqual(self.provider.calls, 1)
+
+    def test_stream_small_talk_works_without_a_configured_key(self) -> None:
+        self.write_config(configured=False)
+        events = list(self.service([]).stream("hello"))
+
+        self.assertEqual(events[0]["event"], "start")
+        self.assertEqual(events[-1]["event"], "done")
+        self.assertIn("sir", str(events[-1]["answer"]).lower())
+        self.assertEqual(self.provider.calls, 0)
+
+    def test_stream_no_match_does_not_call_the_provider(self) -> None:
+        self.write_config()
+        note = make_note(1, "Pricing Strategy", "Our pricing strategy is value based.")
+        events = list(self.service([note]).stream("quantum entanglement"))
+
+        self.assertEqual(events[-1]["event"], "done")
+        self.assertEqual(events[-1]["answer"], "I don't have a note that covers that.")
+        self.assertEqual(self.provider.calls, 0)
+
+    def test_stream_requires_a_key_for_a_real_question(self) -> None:
+        self.write_config(configured=False)
+        with self.assertRaises(NotConfiguredError):
+            list(self.service([]).stream("What is our pricing strategy?"))
+
     def test_capture_recall_bypasses_the_provider(self) -> None:
         self.write_config(configured=False)
         note = make_note(

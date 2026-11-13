@@ -17,3 +17,23 @@ class NotConfiguredError(BrainError):
 
 class ProviderError(BrainError):
     """The upstream model provider failed."""
+
+
+class ToolError(BrainError):
+    """Base class for tool registry failures."""
+
+
+class ToolNotFound(ToolError):
+    """The requested tool is not registered."""
+
+
+class PermissionDenied(ToolError):
+    """The caller does not hold the permission a tool requires."""
+
+
+class ApprovalRequired(ToolError):
+    """The tool changes state and needs explicit human approval."""
+
+
+class ToolInputError(ToolError):
+    """The tool arguments do not match the declared schema."""

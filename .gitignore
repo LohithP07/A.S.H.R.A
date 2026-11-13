@@ -18,3 +18,9 @@ server.out
 server.err
 test-server.out
 test-server.err
+
+# Local persistence and MCP runtime files
+data/
+*.db
+*.db-shm
+*.db-wal

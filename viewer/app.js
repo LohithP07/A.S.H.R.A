@@ -1074,6 +1074,40 @@
     chatCard.hidden = false;
   }
 
+  function beginChatCard() {
+    if (!chatCard || !chatAnswer || !chatSources) return;
+    chatAnswer.textContent = '';
+    chatSources.replaceChildren();
+    chatCard.classList.remove('error');
+    chatCard.hidden = false;
+  }
+
+  function appendChatAnswer(text) {
+    if (!chatAnswer || !text) return;
+    chatAnswer.textContent += text;
+  }
+
+  function parseSseBlock(raw) {
+    const lines = String(raw || '').split(/\r?\n/);
+    let name = 'message';
+    const data = [];
+
+    for (const line of lines) {
+      if (line.startsWith('event:')) {
+        name = line.slice(6).trim();
+      } else if (line.startsWith('data:')) {
+        data.push(line.slice(5).trim());
+      }
+    }
+
+    if (!data.length) return null;
+    try {
+      return Object.assign({ event: name }, JSON.parse(data.join('\n')));
+    } catch (error) {
+      return null;
+    }
+  }
+
   function revealSources(ids) {
     const seen = new Set();
     const list = [];
@@ -1560,6 +1594,105 @@
     }
   }
 
+  async function streamAnswer(question) {
+    const response = await fetch('/chat/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        question,
+        session_id: chatSessionId || null
+      })
+    });
+
+    if (!response.ok) {
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (error) {
+        data = null;
+      }
+      const detail = data && (data.detail || data.error);
+      throw new Error(detail || `A.S.H.R.A returned HTTP ${response.status}.`);
+    }
+
+    if (!response.body || typeof response.body.getReader !== 'function') {
+      return null;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let answer = '';
+    let sessionId = '';
+    let nodes = [];
+    let sources = [];
+    let sawDone = false;
+
+    beginChatCard();
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let boundary = buffer.indexOf('\n\n');
+      while (boundary >= 0) {
+        const block = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        const event = parseSseBlock(block);
+
+        if (event) {
+          if (event.event === 'start') {
+            if (event.session_id) {
+              sessionId = event.session_id;
+              chatSessionId = sessionId;
+              writeSessionId(sessionId);
+            }
+          } else if (event.event === 'sources') {
+            nodes = Array.isArray(event.nodes) ? event.nodes : [];
+            sources = Array.isArray(event.sources) ? event.sources : [];
+            renderSources(sources);
+            revealSources(nodes);
+          } else if (event.event === 'token') {
+            const text = typeof event.text === 'string' ? event.text : '';
+            answer += text;
+            appendChatAnswer(text);
+          } else if (event.event === 'done') {
+            sawDone = true;
+            if (event.session_id) {
+              sessionId = event.session_id;
+              chatSessionId = sessionId;
+              writeSessionId(sessionId);
+            }
+            if (typeof event.answer === 'string' && event.answer) {
+              answer = event.answer;
+              if (chatAnswer) chatAnswer.textContent = answer;
+            }
+            if (Array.isArray(event.nodes)) nodes = event.nodes;
+            if (Array.isArray(event.sources)) sources = event.sources;
+            renderSources(sources);
+            revealSources(nodes);
+          } else if (event.event === 'error') {
+            throw new Error(event.detail || event.error || 'A.S.H.R.A could not answer.');
+          }
+        }
+
+        boundary = buffer.indexOf('\n\n');
+      }
+    }
+
+    if (!sawDone && !answer) {
+      throw new Error('A.S.H.R.A returned an empty stream.');
+    }
+
+    return {
+      answer,
+      session_id: sessionId,
+      nodes,
+      sources
+    };
+  }
+
   async function askAshra(question, options = {}) {
     const cleaned = String(question || '').trim();
     if (!cleaned || !chatForm) return;
@@ -1577,6 +1710,14 @@
     setChatStatus('● thinking…', 'busy');
 
     try {
+      const streamed = await streamAnswer(cleaned);
+      if (streamed) {
+        setChatStatus(CHAT_HINT);
+        speakAnswer(streamed.answer);
+        return;
+      }
+
+      // Fallback for a browser or proxy that does not expose a stream body.
       const response = await fetch('/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

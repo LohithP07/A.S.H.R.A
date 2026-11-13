@@ -58,7 +58,7 @@ Open a browser to http://127.0.0.1:4700/ to see the A.S.H.R.A UI.
 | Endpoint | Method | Payload | Notes |
 |----------|--------|---------|-------|
 | `/health` | GET | - | Liveness, version, and server time |
-| `/status` | GET | - | Provider, vault, session, and tool summary |
+| `/status` | GET | - | Provider, vault, session, tool, agent, and integration summary |
 | `/chat` | POST | `{ "question": "...", "session_id": "optional", "permission": "read" }` | Runs the tool loop; returns answer, sources, note ids, and any pending approval |
 | `/chat/stream` | POST | same as `/chat` | Server-sent events (`start`, `sources`, `tool_call`, `tool_result`, `approval_required`, `token`, `done`, `error`) |
 | `/remember` | POST | `{ "text": "...", "source": "typed" }` | Create a new capture |
@@ -68,6 +68,8 @@ Open a browser to http://127.0.0.1:4700/ to see the A.S.H.R.A UI.
 | `/sessions/{id}` | GET | - | Persisted conversation history for one session |
 | `/tools` | GET | `?permission=read` | Tools available at a permission level |
 | `/tools/invoke` | POST | `{ "name": "...", "arguments": {}, "permission": "read", "approved": false }` | Invoke a tool through the permission gate |
+| `/agents` | GET | - | Specialist subagents, their permission ceilings, and tool scopes |
+| `/agents/{name}` | GET | - | One subagent definition |
 | `/integrations` | GET | - | Connected MCP servers, their tools, and any connection errors |
 | `/integrations/{name}` | GET | - | Status for one MCP integration |
 | `/approvals` | GET | `?status=pending&limit=50` | Pending and recent approval requests |
@@ -92,7 +94,7 @@ Tools declare a permission tier and whether they need approval:
 | `act` | Change local state |
 | `admin` | Destructive or configuration-level work |
 
-The default tool pack is `fs_list`, `fs_read`, and `fs_search`, scoped to `notes/`. `vault_remember` and `vault_append` require `act` permission plus `approved: true`. Paths cannot escape the vault, and blocked names such as `config.json`, `.env`, and `.git` are never exposed.
+The default tool pack is `fs_list`, `fs_read`, and `fs_search`, scoped to `notes/`, plus `spawn_agent` for delegation. `vault_remember` and `vault_append` require `act` permission plus `approved: true`. Paths cannot escape the vault, and blocked names such as `config.json`, `.env`, and `.git` are never exposed.
 
 ### Tool-calling orchestrator
 
@@ -101,6 +103,24 @@ The default tool pack is `fs_list`, `fs_read`, and `fs_search`, scoped to `notes
 Chat requests carry a `permission` tier (`read` by default; the viewer sends `act`). Read tools run immediately. A state-changing tool that requires approval does not run: the orchestrator stores the pending call in `data/ashra.db`, emits `approval_required`, and returns `status: "awaiting_approval"`. Approving the call through `POST /approvals/{id}` executes it and resumes the answer with the saved conversation state.
 
 Providers that do not implement tool calling still answer normally, just without tools. The Anthropic and OpenAI-compatible providers both support tool schemas and tool results.
+
+### Scoped subagents
+
+The orchestrator can delegate one bounded task to a specialist through the `spawn_agent` tool. Phase 1E ships three:
+
+| Agent | Permission ceiling | Scope |
+|-------|--------------------|-------|
+| `researcher` | `read` | Search the vault and read-only integrations, then report the evidence. |
+| `writer` | `draft` | Turn supplied material into a draft; never sends anything. |
+| `operator` | `act` | Inspect state and prepare actions; approval-gated calls go back to the parent. |
+
+Three rules bound every child:
+
+- The child's permission is the weaker of its own declaration and the parent's `permission`. An `operator` spawned by a `read` caller runs as `read`.
+- The child only sees tools matching its allowlist. `spawn_agent` is removed from the child's tool list, so delegation cannot recurse.
+- Approval-gated tools are never advertised to a child. If the model asks for one anyway, the call is refused and the child is told to return the proposed action to the parent, which owns the approval queue.
+
+Each run returns `{ "agent": ..., "status": ..., "answer": ..., "steps": ..., "tools": [...], "permission": ... }` and writes an `agent` audit event. `GET /agents` lists the registry.
 
 ### MCP integrations (read-only)
 
@@ -176,6 +196,7 @@ Each capture contains simple frontmatter with `created` and `source`, an H1 titl
 
 - Chat with your notes: `POST /chat` builds a graph of related notes and asks the LLM.
 - Tool-calling loop: the assistant can search and read the vault on its own, then answer.
+- Scoped subagents: delegate to `researcher`, `writer`, or `operator` with permission ceilings and tool allowlists.
 - Read-only MCP integrations: attach mail, calendar, or other MCP servers as namespaced tools.
 - Streaming answers: `POST /chat/stream` sends sources first, then word-sized tokens.
 - Approval gate: state-changing tools pause for a click in the viewer before running.
@@ -211,6 +232,7 @@ To add a new note category:
 - `ashra/orchestrator.py` - bounded tool-calling loop and approval continuation.
 - `ashra/db.py` - SQLite sessions, messages, approvals, and audit events.
 - `ashra/tools.py` - permission tiers, tool registry, and scoped filesystem tools.
+- `ashra/agents/` - specialist registry, permission ceiling, bounded child runner, and `spawn_agent`.
 - `ashra/integrations/` - MCP client, integration config, and tool registration.
 - `ashra/mcp_server.py` - optional read-only MCP server for the notes vault.
 - `ashra/remember.py` - captures, appends, renames, and deletes note files.

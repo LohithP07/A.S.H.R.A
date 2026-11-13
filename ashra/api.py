@@ -13,6 +13,7 @@ The API keeps the original viewer contract and adds the Phase 1 foundation:
     GET  /sessions/{id}   persisted conversation history
     GET  /tools           tools the caller may use
     POST /tools/invoke    invoke a tool through the permission gate
+    GET  /agents          specialist subagents and their scopes
     GET  /integrations    connected MCP servers and their tools
     GET  /approvals       pending and recent approval requests
     POST /approvals/{id}  approve or deny a pending tool call
@@ -43,6 +44,14 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.concurrency import iterate_in_threadpool, run_in_threadpool
 
+from .agents import (
+    SPAWN_TOOL_NAME,
+    AgentRegistry,
+    SubagentRunner,
+    build_default_agents,
+    build_spawn_tool,
+    tool_context,
+)
 from .chat import ChatService
 from .config import load_config
 from .db import Database, SQLiteSessionStore
@@ -64,7 +73,7 @@ from .remember import rename as rename_capture
 from .sessions import SESSION_RE
 from .tools import Permission, ToolRegistry, build_default_registry, parse_permission
 
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 MAX_BODY_BYTES = 64 * 1024
 BLOCKED_NAMES = {"config.json", ".env", ".git"}
 
@@ -171,6 +180,20 @@ def _tool_audit(database: Database):
     return record
 
 
+def _agent_audit(database: Database):
+    def record(payload: dict[str, Any]) -> None:
+        database.record_audit(
+            "agent",
+            str(payload.get("agent", "unknown")),
+            status=str(payload.get("status", "ok")),
+            permission=payload.get("permission"),
+            request_id=payload.get("request_id"),
+            detail=payload,
+        )
+
+    return record
+
+
 def _request_id(request: Request) -> str:
     return str(getattr(request.state, "request_id", "") or "")
 
@@ -186,6 +209,7 @@ def create_app(
     registry: ToolRegistry | None = None,
     orchestrator: Orchestrator | None = None,
     integrations: IntegrationManager | None = None,
+    agents: AgentRegistry | None = None,
     viewer_dir: Path | None = None,
 ) -> FastAPI:
     base = Path(base_dir or Path(__file__).resolve().parent.parent)
@@ -194,6 +218,20 @@ def create_app(
     sessions = SQLiteSessionStore(db)
     service = chat or ChatService(base, sessions=sessions)
     tools = registry or build_default_registry(base, audit=_tool_audit(db))
+
+    agent_registry = agents or AgentRegistry(build_default_agents())
+    subagents: SubagentRunner | None = None
+    if isinstance(service, ChatService):
+        subagents = SubagentRunner(
+            tools,
+            lambda: service.provider_factory(load_config(service.config_path)),
+            audit=_agent_audit(db),
+        )
+        try:
+            tools.get(SPAWN_TOOL_NAME)
+        except ToolNotFound:
+            tools.register(build_spawn_tool(subagents, agent_registry))
+
     agent = orchestrator
     if agent is None and isinstance(service, ChatService):
         agent = Orchestrator(service, tools, db)
@@ -232,6 +270,8 @@ def create_app(
     app.state.tools = tools
     app.state.orchestrator = agent
     app.state.integrations = integration_manager
+    app.state.agents = agent_registry
+    app.state.subagents = subagents
 
     # ------------------------------------------------------------------
     # middleware
@@ -350,6 +390,7 @@ def create_app(
             "messages": db.count_messages(),
             "approvals": db.count_approvals(),
             "tools": len(tools.list(Permission.ADMIN)),
+            "agents": len(agent_registry),
             "integrations": (
                 integration_manager.status() if integration_manager is not None else []
             ),
@@ -604,13 +645,14 @@ def create_app(
         granted = parse_permission(request_body.permission)
         request_id = _request_id(request)
         try:
-            result = tools.invoke(
-                request_body.name,
-                request_body.arguments,
-                granted=granted,
-                approved=request_body.approved,
-                request_id=request_id,
-            )
+            with tool_context(granted, request_id):
+                result = tools.invoke(
+                    request_body.name,
+                    request_body.arguments,
+                    granted=granted,
+                    approved=request_body.approved,
+                    request_id=request_id,
+                )
         except (ToolNotFound, PermissionDenied, ApprovalRequired, ToolInputError) as exc:
             db.record_audit(
                 "tool",
@@ -630,6 +672,18 @@ def create_app(
             "permission": granted.value,
             "result": result,
         }
+
+    @app.get("/agents")
+    def list_agents() -> dict[str, Any]:
+        return {"agents": agent_registry.list()}
+
+    @app.get("/agents/{name}")
+    def get_agent(name: str) -> Any:
+        try:
+            spec = agent_registry.get(name)
+        except ToolNotFound:
+            return _error(404, "not_found", "No such agent.")
+        return {"agent": spec.as_dict()}
 
     @app.get("/integrations")
     def list_integrations() -> dict[str, Any]:

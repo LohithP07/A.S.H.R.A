@@ -19,6 +19,11 @@ assistant with:
 This plan keeps those seams in place now so the later conversion is an
 extension, not a rewrite.
 
+> **The PRD is authoritative for v1.0.** `docs/prd/ashra-prd.pdf` (v1.0 Draft,
+> 13 November 2026) defines scope, privacy classes, connector and channel
+> contracts, and the milestone plan. This file records how that plan is being
+> executed; where the two disagree, the PRD wins and this file is corrected.
+
 ---
 
 ## Current baseline
@@ -488,6 +493,68 @@ everything was already local.
 
 ---
 
+## Phase 2E.0 — Connector foundation (complete)
+
+The first phase of M1. It defines the contract every external adapter
+implements, with no credentials and no network, so 2E.1 and 2E.2 add adapters
+rather than architecture.
+
+- [x] Add `ashra/connectors/` with `Connector`, `Capabilities`, `Capability`,
+  `Record`, `Source`, `Candidate`, `NormalisedRecord`, `PollResult`, and
+  `ConnectorHealth`.
+- [x] Enforce declared capabilities at the point of use: `read`, `draft`,
+  `write`, `delete`, with `delete` impossible without `write`.
+- [x] Add `ConnectorRegistry` with registration, lookup, capability checks,
+  status, health, and credential-readiness reporting.
+- [x] Add `Connector.run()`: capability guard, per-connector rate limit, and
+  health recording for both success and failure.
+- [x] Add `ConnectorRegistry.ingest()`: poll, normalise, persist Sources
+  idempotently by `(connector, kind, external_id)`, and return candidates
+  without writing tasks or memories.
+- [x] Add `ashra/credentials.py`: reference validation, `MemoryVault` for
+  tests, a Windows Credential Manager vault using `ctypes`, and redaction by
+  reference.
+- [x] Add `ashra/sensitivity.py` as the single privacy vocabulary
+  (`public`, `internal`, `private`, `sensitive`, `secret`) with conservative
+  classification and inheritance; memory now uses it.
+- [x] Add schema v4: `connectors` and `sources` tables, plus a forward-only
+  migration that maps legacy `normal` sensitivity to `internal`.
+- [x] Add `ReplayConnector` so the contract is testable with fixtures and no
+  mailbox.
+- [x] Add `GET /connectors` and `GET /connectors/{id}`; include the connector
+  count in `GET /status`.
+- [x] Keep every response free of credential values; the API reports reference
+  names and readiness only.
+- [x] Test capability enforcement, idempotent ingestion, candidate inheritance,
+  rate limiting, failure isolation, schema migration, credential redaction, and
+  the API paths.
+- [x] Bump the version to `0.8.0`.
+
+### Phase 2E.0 acceptance criteria
+
+- A read-only connector registers, polls, and produces Sources plus candidate
+  proposals without any network access or credential.
+- Polling twice does not duplicate a Source; the second pass updates it.
+- A connector asked to exceed its declared capability fails with a named error.
+- One broken connector reports `status: "error"` and does not block another.
+- A candidate inherits the stronger of its own and its source's sensitivity.
+- `GET /connectors` lists declarations and readiness without a secret value.
+- The full suite passes with no credentials configured.
+
+### Deliberately deferred
+
+- **Approval payload hashing and nonces.** PRD 6.4 and scenario A5 require an
+  immutable, single-use, hash-bound approval. Today's approval row binds the
+  tool and arguments but has no payload hash. This belongs with the Desk and
+  the approved-execution phase (2D/2G), not the connector read path.
+- **Connector configuration parsing.** The `connectors` block in PRD Appendix B
+  arrives with the first real adapter (2E.1), where its fields can be validated
+  against a working implementation.
+- **Runs table.** Turn-level run records are required by the Desk (2D) and are
+  not needed to poll a read-only source.
+
+---
+
 ## Phase 2 — The Voice (implemented in this pass)
 
 - [x] Speak every answer with `speechSynthesis`, preferring a British English
@@ -701,7 +768,9 @@ ashra/
   __init__.py               package exports
   api.py                    FastAPI routes, SSE, request IDs, error mapping
   config.py                 config validation
-  db.py                     SQLite sessions, messages, approvals, audit events
+  credentials.py            credential refs, redaction, Windows vault
+  sensitivity.py            the five privacy classes and classification
+  db.py                     SQLite sessions, messages, approvals, sources, audit
   notes.py                  note loading
   retrieval.py              keyword scoring
   sessions.py               conversation-store protocol + in-memory store
@@ -711,11 +780,13 @@ ashra/
   remember.py               capture CRUD + graph rebuild
   tools.py                  permission tiers + tool registry + scoped filesystem
   agents/                   specialist registry, permission ceiling, child runner
+  connectors/               adapter contract, registry, replay fixture
   integrations/             MCP client, integration config, tool registration
   mcp_server.py             optional read-only MCP filesystem server
   memory.py                 typed memory, lifecycle, retrieval, graph, health
   orchestrator.py           bounded tool loop + approval continuation
   chat.py                   answer + streaming pipeline
+docs/prd/ashra-prd.pdf      v1.0 product requirements (authoritative scope)
 data/                       local SQLite database (git-ignored)
 viewer/
   index.html                galaxy + chat bar

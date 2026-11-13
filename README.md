@@ -75,6 +75,8 @@ Open a browser to http://127.0.0.1:4700/ for Home, http://127.0.0.1:4700/galaxy.
 | `/agents/{name}` | GET | - | One subagent definition |
 | `/integrations` | GET | - | Connected MCP servers, their tools, and any connection errors |
 | `/integrations/{name}` | GET | - | Status for one MCP integration |
+| `/connectors` | GET | - | Declared external connectors, their capabilities, health, and credential readiness (names only) |
+| `/connectors/{id}` | GET | - | One connector declaration and its last-known health |
 | `/approvals` | GET | `?status=pending&limit=50` | Pending and recent approval requests |
 | `/approvals/{id}` | POST | `{ "approve": true }` | Approve or deny a pending tool call and resume the answer |
 | `/audit` | GET | `?limit=50&event=chat` | Recent audit events |
@@ -204,6 +206,43 @@ The MCP SDK is optional. Install it with:
 ```bash
 python -m pip install "mcp>=1.0"
 ```
+
+### Connectors (read-only foundation)
+
+Phase 2E.0 adds the contract every external adapter implements. There is no Gmail or calendar adapter yet; the point of this phase is that adding one cannot widen its own authority.
+
+```python
+from ashra.connectors import Connector, PollResult, Record, Source, NormalisedRecord
+
+class GmailConnector(Connector):
+    def __init__(self, vault):
+        super().__init__(
+            connector_id="gmail",
+            label="Gmail inbox",
+            capabilities={"read": True},          # no draft, write, or delete
+            scopes={"folders": ["INBOX"]},
+            credential_ref="ashra/gmail",         # a name, never a value
+            min_interval_seconds=60,
+        )
+        self.vault = vault
+
+    def poll(self, cursor=None):
+        ...
+
+    def normalise(self, record):
+        return NormalisedRecord(source=Source(...), candidates=(...))
+```
+
+The rules the registry enforces:
+
+- **Declared capabilities only.** A connector that declares `read` and is asked to `write` raises `CapabilityDenied`. `delete` cannot be declared without `write`, and nothing in v1.0 may declare either.
+- **Polling is idempotent.** Sources are deduplicated by `(connector, kind, external_id)`, so a repeated poll updates the row instead of duplicating the mailbox.
+- **Polls are rate-limited** per connector, and a failure is recorded as health rather than raised into chat.
+- **Classification happens at ingestion.** Each Source carries one of the PRD classes (`public`, `internal`, `private`, `sensitive`, `secret`), inferred conservatively when the adapter does not declare one, and a candidate proposal inherits the stronger of its own and its source's class.
+- **Proposals, not writes.** `normalise()` returns candidate tasks and memories. They are returned to the caller for confirmation; nothing enters the task ledger or memory store directly.
+- **Credential references, not values.** `GET /connectors` reports whether `ashra/gmail` resolves. The vault is Windows Credential Manager on Windows and an in-memory vault elsewhere, which is deliberately not persistent.
+
+Schema v4 adds `connectors` and `sources`, and migrates the old three-value memory sensitivity vocabulary (`normal`, `private`, `sensitive`) to the PRD's five classes (`normal` becomes `internal`). `ReplayConnector` feeds fixture records through the same path, so the whole loop is testable without a mailbox or a key.
 
 ### MCP filesystem server
 

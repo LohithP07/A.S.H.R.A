@@ -2,7 +2,8 @@
 
 The package is intentionally kept separate from the viewer and from any one
 model provider.  That keeps the notes, retrieval, conversation memory, tool
-registry, orchestrator, and model transport independently replaceable.
+registry, orchestrator, connectors, and model transport independently
+replaceable.
 """
 
 from .agents import (
@@ -16,13 +17,26 @@ from .agents import (
 )
 from .chat import ChatResult, ChatService
 from .config import AppConfig, load_config
+from .connectors import (
+    Capabilities,
+    Capability,
+    Connector,
+    ConnectorHealth,
+    ConnectorRegistry,
+    IngestResult,
+    PollResult,
+    Record,
+    ReplayConnector,
+    Source,
+)
+from .credentials import CredentialVault, MemoryVault, get_vault
 from .db import Database, SQLiteSessionStore
 from .errors import BrainError, ConfigError, NotConfiguredError, ProviderError
 from .integrations import IntegrationConfig, IntegrationManager, load_integrations
 from .orchestrator import Orchestrator, OrchestratorResult
 from .tools import Permission, ToolRegistry, build_default_registry
 
-__version__ = "0.5.0"
+__version__ = "0.8.0"
 
 __all__ = [
     "AgentRegistry",
@@ -30,24 +44,37 @@ __all__ = [
     "AgentSpec",
     "AppConfig",
     "BrainError",
+    "Capabilities",
+    "Capability",
     "ChatResult",
     "ChatService",
     "ConfigError",
+    "Connector",
+    "ConnectorHealth",
+    "ConnectorRegistry",
+    "CredentialVault",
     "Database",
+    "IngestResult",
     "IntegrationConfig",
     "IntegrationManager",
+    "MemoryVault",
     "NotConfiguredError",
     "Orchestrator",
     "OrchestratorResult",
     "Permission",
+    "PollResult",
     "ProviderError",
+    "Record",
+    "ReplayConnector",
     "SPAWN_TOOL_NAME",
     "SQLiteSessionStore",
+    "Source",
     "SubagentRunner",
     "ToolRegistry",
     "build_default_agents",
     "build_default_registry",
     "build_spawn_tool",
+    "get_vault",
     "load_config",
     "load_integrations",
 ]

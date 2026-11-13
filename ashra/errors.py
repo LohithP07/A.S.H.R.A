@@ -41,3 +41,23 @@ class ToolInputError(ToolError):
 
 class IntegrationError(BrainError):
     """An external MCP integration could not be reached or returned an error."""
+
+
+class ConnectorError(BrainError):
+    """A connector is missing, misconfigured, or returned unusable data."""
+
+
+class ConnectorNotFound(ConnectorError):
+    """The requested connector is not registered."""
+
+
+class CapabilityDenied(ConnectorError):
+    """A connector was asked to do something it does not declare."""
+
+
+class RateLimited(ConnectorError):
+    """A connector was polled again before its minimum interval elapsed."""
+
+
+class CredentialError(BrainError):
+    """The credential vault could not read or write a reference."""

@@ -55,13 +55,19 @@ from .agents import (
 )
 from .chat import ChatService
 from .config import load_config
+from .connectors import ConnectorRegistry
+from .credentials import CredentialVault, get_vault
 from .db import Database, SQLiteSessionStore
 from .errors import (
     ApprovalRequired,
+    CapabilityDenied,
     ConfigError,
+    ConnectorError,
+    ConnectorNotFound,
     NotConfiguredError,
     PermissionDenied,
     ProviderError,
+    RateLimited,
     ToolInputError,
     ToolNotFound,
 )
@@ -76,7 +82,7 @@ from .remember import rename as rename_capture
 from .sessions import SESSION_RE
 from .tools import Permission, ToolRegistry, build_default_registry, parse_permission
 
-VERSION = "0.7.1"
+VERSION = "0.8.0"
 MAX_BODY_BYTES = 64 * 1024
 BLOCKED_NAMES = {"config.json", ".env", ".git"}
 
@@ -255,6 +261,8 @@ def create_app(
     integrations: IntegrationManager | None = None,
     agents: AgentRegistry | None = None,
     memory: MemoryStore | None = None,
+    connectors: ConnectorRegistry | None = None,
+    vault: CredentialVault | None = None,
     viewer_dir: Path | None = None,
 ) -> FastAPI:
     base = Path(base_dir or Path(__file__).resolve().parent.parent)
@@ -292,6 +300,11 @@ def create_app(
         if configs:
             integration_manager = IntegrationManager(configs)
 
+    connector_registry = (
+        connectors if connectors is not None else ConnectorRegistry(database=db)
+    )
+    credential_vault = vault if vault is not None else get_vault()
+
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         db.initialize()
@@ -323,6 +336,8 @@ def create_app(
     app.state.agents = agent_registry
     app.state.subagents = subagents
     app.state.memory = memory_store
+    app.state.connectors = connector_registry
+    app.state.vault = credential_vault
 
     # Compress large static assets and JSON.  Event streams are excluded by
     # Starlette's default content-type filter, so SSE still flushes per token.
@@ -395,6 +410,22 @@ def create_app(
     async def tool_input_error(_request: Request, exc: ToolInputError):
         return _error(400, "bad_request", str(exc))
 
+    @app.exception_handler(CapabilityDenied)
+    async def capability_denied(_request: Request, exc: CapabilityDenied):
+        return _error(403, "capability_denied", str(exc))
+
+    @app.exception_handler(ConnectorNotFound)
+    async def connector_not_found(_request: Request, exc: ConnectorNotFound):
+        return _error(404, "connector_not_found", str(exc))
+
+    @app.exception_handler(RateLimited)
+    async def rate_limited(_request: Request, exc: RateLimited):
+        return _error(429, "rate_limited", str(exc))
+
+    @app.exception_handler(ConnectorError)
+    async def connector_error(_request: Request, exc: ConnectorError):
+        return _error(400, "connector_error", str(exc))
+
     @app.exception_handler(ValueError)
     async def value_error(_request: Request, exc: ValueError):
         return _error(400, "bad_request", str(exc))
@@ -457,6 +488,7 @@ def create_app(
             "approvals": db.count_approvals(),
             "tools": len(tools.list(Permission.ADMIN)),
             "agents": len(agent_registry),
+            "connectors": len(connector_registry),
             "integrations": (
                 integration_manager.status() if integration_manager is not None else []
             ),
@@ -1056,6 +1088,24 @@ def create_app(
             if item["name"] == str(name).strip().lower():
                 return {"integration": item}
         return _error(404, "not_found", "No such integration.")
+
+    @app.get("/connectors")
+    def list_connectors() -> dict[str, Any]:
+        return {
+            "connectors": connector_registry.status(),
+            "credentials": connector_registry.credentials(credential_vault),
+            "vault": {
+                "name": getattr(credential_vault, "name", "unknown"),
+                "persistent": bool(credential_vault.available()),
+            },
+        }
+
+    @app.get("/connectors/{connector_id}")
+    def get_connector(connector_id: str) -> Any:
+        connector = connector_registry.find(connector_id)
+        if connector is None:
+            return _error(404, "not_found", "No such connector.")
+        return {"connector": connector.status()}
 
     @app.get("/approvals")
     def list_approvals(status: str | None = None, limit: int = 50) -> dict[str, Any]:

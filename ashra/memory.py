@@ -29,6 +29,7 @@ from collections.abc import Iterable
 from datetime import datetime, timezone
 from typing import Any
 
+from . import sensitivity as privacy
 from .db import Database
 from .notes import Note
 from .retrieval import tokenize
@@ -45,7 +46,8 @@ KINDS = (
     "observation",
 )
 STATUSES = ("proposed", "confirmed", "rejected", "archived")
-SENSITIVITIES = ("normal", "private", "sensitive")
+# Kept as a public alias: the vocabulary itself lives in ashra.sensitivity.
+SENSITIVITIES = privacy.CLASSES
 
 DEFAULT_CONFIDENCE = 0.5
 EXPLICIT_CONFIDENCE = 0.95
@@ -55,27 +57,6 @@ MAX_ENTITIES = 16
 MAX_PROPOSALS_PER_TEXT = 6
 STALE_DAYS = 180
 DECAY_DAYS = 120
-
-# A memory must never become a credential store.  These patterns catch the
-# obvious shapes; the sensitivity classifier catches the rest.
-_SECRET_RE = re.compile(
-    r"(?:"
-    r"sk-[A-Za-z0-9_-]{16,}"
-    r"|ghp_[A-Za-z0-9]{20,}"
-    r"|github_pat_[A-Za-z0-9_]{20,}"
-    r"|AKIA[0-9A-Z]{16}"
-    r"|-----BEGIN [A-Z ]*PRIVATE KEY-----"
-    r"|(?:password|passwd|passcode)\s*[:=]\s*\S+"
-    r"|(?:api[_-]?key|secret|token)\s*[:=]\s*[A-Za-z0-9_\-]{12,}"
-    r")",
-    re.IGNORECASE,
-)
-
-_SENSITIVE_RE = re.compile(
-    r"\b(?:password|passcode|secret|token|credit\s+card|ssn|"
-    r"social\s+security|medical|diagnosis|prescription|salary|bank\s+account)\b",
-    re.IGNORECASE,
-)
 
 _ENTITY_RE = re.compile(
     r"\b(?:[A-Z][a-zA-Z0-9&.'-]+(?:\s+[A-Z][a-zA-Z0-9&.'-]+){0,3})\b"
@@ -155,7 +136,7 @@ def clean_content(value: Any) -> str:
             f"A memory is capped at {MAX_CONTENT_CHARS:,} characters. "
             "Split it into smaller claims."
         )
-    if _SECRET_RE.search(text):
+    if privacy.looks_secret(text):
         raise ValueError("I will not store credentials or secrets in memory.")
     return text
 
@@ -184,12 +165,7 @@ def validate_status(value: str | None) -> str:
 
 
 def validate_sensitivity(value: str | None) -> str:
-    sensitivity = str(value or "normal").strip().lower()
-    if sensitivity not in SENSITIVITIES:
-        raise ValueError(
-            f"Unknown sensitivity '{value}'. Use one of: {', '.join(SENSITIVITIES)}."
-        )
-    return sensitivity
+    return privacy.parse(value)
 
 
 def _clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
@@ -287,7 +263,7 @@ def infer_confidence(text: str, kind: str) -> float:
 
 
 def infer_sensitivity(text: str) -> str:
-    return "sensitive" if _SENSITIVE_RE.search(text) else "normal"
+    return privacy.classify(text)
 
 
 def split_memories(text: str) -> list[str]:
@@ -950,7 +926,8 @@ class MemoryStore:
                 "SELECT COUNT(*) AS n FROM memories WHERE pinned = 1"
             ).fetchone()["n"]
             sensitive = connection.execute(
-                "SELECT COUNT(*) AS n FROM memories WHERE sensitivity != 'normal'"
+                "SELECT COUNT(*) AS n FROM memories "
+                "WHERE sensitivity IN ('private', 'sensitive', 'secret')"
             ).fetchone()["n"]
             link_count = connection.execute(
                 "SELECT COUNT(*) AS n FROM memory_links"

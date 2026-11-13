@@ -13,6 +13,7 @@ The API keeps the original viewer contract and adds the Phase 1 foundation:
     GET  /sessions/{id}   persisted conversation history
     GET  /tools           tools the caller may use
     POST /tools/invoke    invoke a tool through the permission gate
+    GET  /integrations    connected MCP servers and their tools
     GET  /approvals       pending and recent approval requests
     POST /approvals/{id}  approve or deny a pending tool call
     GET  /audit           recent audit events
@@ -40,7 +41,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from starlette.concurrency import iterate_in_threadpool
+from starlette.concurrency import iterate_in_threadpool, run_in_threadpool
 
 from .chat import ChatService
 from .config import load_config
@@ -54,6 +55,7 @@ from .errors import (
     ToolInputError,
     ToolNotFound,
 )
+from .integrations import IntegrationManager, load_integrations
 from .orchestrator import Orchestrator
 from .remember import append as append_capture
 from .remember import forget as forget_capture
@@ -62,7 +64,7 @@ from .remember import rename as rename_capture
 from .sessions import SESSION_RE
 from .tools import Permission, ToolRegistry, build_default_registry, parse_permission
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 MAX_BODY_BYTES = 64 * 1024
 BLOCKED_NAMES = {"config.json", ".env", ".git"}
 
@@ -183,6 +185,7 @@ def create_app(
     database: Database | None = None,
     registry: ToolRegistry | None = None,
     orchestrator: Orchestrator | None = None,
+    integrations: IntegrationManager | None = None,
     viewer_dir: Path | None = None,
 ) -> FastAPI:
     base = Path(base_dir or Path(__file__).resolve().parent.parent)
@@ -195,10 +198,24 @@ def create_app(
     if agent is None and isinstance(service, ChatService):
         agent = Orchestrator(service, tools, db)
 
+    integration_manager = integrations
+    if integration_manager is None:
+        configs = load_integrations(base / "config.json")
+        if configs:
+            integration_manager = IntegrationManager(configs)
+
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         db.initialize()
-        yield
+        if integration_manager is not None:
+            # Probing an MCP server can block; keep it off the event loop.
+            await run_in_threadpool(integration_manager.connect_all)
+            integration_manager.register_tools(tools)
+        try:
+            yield
+        finally:
+            if integration_manager is not None:
+                integration_manager.close()
 
     app = FastAPI(
         title="A.S.H.R.A",
@@ -214,6 +231,7 @@ def create_app(
     app.state.chat = service
     app.state.tools = tools
     app.state.orchestrator = agent
+    app.state.integrations = integration_manager
 
     # ------------------------------------------------------------------
     # middleware
@@ -332,6 +350,9 @@ def create_app(
             "messages": db.count_messages(),
             "approvals": db.count_approvals(),
             "tools": len(tools.list(Permission.ADMIN)),
+            "integrations": (
+                integration_manager.status() if integration_manager is not None else []
+            ),
             "database": str(db.path),
             "viewer": str(viewer),
         }
@@ -609,6 +630,23 @@ def create_app(
             "permission": granted.value,
             "result": result,
         }
+
+    @app.get("/integrations")
+    def list_integrations() -> dict[str, Any]:
+        return {
+            "integrations": (
+                integration_manager.status() if integration_manager is not None else []
+            )
+        }
+
+    @app.get("/integrations/{name}")
+    def get_integration(name: str) -> Any:
+        if integration_manager is None:
+            return _error(404, "not_found", "No such integration.")
+        for item in integration_manager.status():
+            if item["name"] == str(name).strip().lower():
+                return {"integration": item}
+        return _error(404, "not_found", "No such integration.")
 
     @app.get("/approvals")
     def list_approvals(status: str | None = None, limit: int = 50) -> dict[str, Any]:

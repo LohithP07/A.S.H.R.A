@@ -101,8 +101,8 @@ class Orchestrator:
             yield from self.chat._stream_result(prepared.immediate)
             return
 
-        if not prepared.matches:
-            answer = "I don't have a note that covers that."
+        if not prepared.matches and not prepared.memories:
+            answer = "I don't have a note or memory that covers that."
             self.chat.sessions.append_exchange(prepared.session_id, prepared.question, answer)
             yield from self.chat._stream_result(
                 ChatResult(
@@ -115,11 +115,15 @@ class Orchestrator:
             )
             return
 
-        sources = self.chat._sources(prepared.matches)
+        sources = self.chat._sources(prepared.matches, prepared.memories)
         nodes = [item.note.id for item in prepared.matches]
         yield {"event": "sources", "sources": sources, "nodes": nodes}
 
-        system = build_system_prompt(prepared.matches, prepared.config)
+        system = build_system_prompt(
+            prepared.matches,
+            prepared.config,
+            prepared.memories,
+        )
         provider = self.chat.provider_factory(prepared.config)
         state = self._state(prepared, system, granted)
 
@@ -275,7 +279,7 @@ class Orchestrator:
             "session_id": prepared.session_id,
             "model": prepared.config.model,
             "nodes": [item.note.id for item in prepared.matches],
-            "sources": self.chat._sources(prepared.matches),
+            "sources": self.chat._sources(prepared.matches, prepared.memories),
             "messages": messages,
             "system": system,
             "step": 1,

@@ -148,6 +148,7 @@ button:focus-visible { outline: 1px solid #b9a7ff; outline-offset: 4px; }
 }
 .ghost-btn:hover { color: #fff; border-color: rgba(183, 163, 255, 0.5); background: rgba(31, 24, 57, 0.62); }
 .ghost-btn.active { color: #ddd2ff; border-color: rgba(170, 145, 255, 0.37); }
+a.ghost-btn { display: inline-flex; align-items: center; text-decoration: none; }
 
 /* ---------- Legend ---------- */
 

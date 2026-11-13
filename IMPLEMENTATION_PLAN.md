@@ -338,6 +338,86 @@ ashra/mcp_server.py ── scoped read-only filesystem tools
 
 ---
 
+## Phase 2A — Memory substrate (complete)
+
+The notes vault is now one source of knowledge, not the whole mind. Memory is a
+set of small, typed, provenance-carrying claims with a lifecycle.
+
+- [x] Add schema v3 with `memories`, `memory_links`, `memory_events`, and an
+      optional FTS5 index. When FTS5 is unavailable the store falls back to a
+      scored full scan.
+- [x] Add `ashra/memory.py` with typed kinds (`fact`, `preference`, `person`,
+      `project`, `event`, `task`, `document`, `procedure`, `observation`) and
+      statuses (`proposed`, `confirmed`, `rejected`, `archived`).
+- [x] Support `propose`, `remember`, `confirm`, `reject`, `archive`, `update`,
+      and `forget`; duplicate claims reinforce the existing record instead of
+      creating noise.
+- [x] Score retrieval by lexical overlap, confidence, reinforcement, recency,
+      and pinning. Return evidence, not just text.
+- [x] Extract entities and link memories that share them, so the Brain graph has
+      real edges rather than decorative ones.
+- [x] Ingest notes as `document` memories with a stable `notes/...` source
+      reference; re-ingestion updates instead of duplicating.
+- [x] Report lifecycle counts and health signals: stale, orphaned,
+      low-confidence, and duplicate groups.
+- [x] Consolidate exact duplicates and gently decay memories nobody has seen.
+- [x] Reject credential-shaped text so memory can never become a secret store.
+- [x] Wire memory into chat: retrieval runs before the model call, memory is
+      included in the system prompt, and memory-only answers work without a
+      matching note.
+- [x] Add memory tools: `memory_search` (`read`), `memory_propose` (`draft`),
+      `memory_remember` (`act` + approval), `memory_forget` (`admin` +
+      approval).
+- [x] Add the `/memory` API: list, stats, proposals, search, graph, timeline,
+      create, propose, ingest, consolidate, get, confirm, reject, patch, forget.
+- [x] `POST /remember` also creates confirmed memory from an explicit capture,
+      while refusing credential-shaped captures.
+
+### Phase 2A acceptance criteria
+
+- A proposed memory is invisible to retrieval until confirmed.
+- Confirming a proposal makes it retrievable; rejecting it removes it from the
+  queue without deleting the audit trail.
+- A duplicate claim reinforces the original rather than creating a second row.
+- Notes ingest idempotently and appear as `document` memories.
+- Chat can answer from memory when no note matches, and cites memory sources.
+- Memory tools respect `read`, `draft`, `act`, and `admin` gates.
+- Secrets are refused at the store boundary.
+- The full suite passes.
+
+---
+
+## Phase 2B — The Brain UI (complete)
+
+The Brain is a place to inspect, correct, and trust what the assistant knows —
+not a prettier graph.
+
+- [x] Add `viewer/brain.html`, `brain.css`, and `brain.js` with no build step.
+- [x] Three synchronized views: **Graph** (relationships), **Timeline**
+      (history), and **Library** (typed records and search).
+- [x] Add a census rail (counts by kind and status), health signals, and
+      ingest/consolidate actions.
+- [x] Add a proposals inbox through the `proposed` lifecycle filter.
+- [x] Add a detail panel with content, provenance, confidence, reinforcement,
+      entities, related memories, and confirm/reject/pin/edit/forget actions.
+- [x] Require a second click before forgetting a memory.
+- [x] Add a composer for proposing or immediately remembering a new claim.
+- [x] Link Galaxy and Brain so the two surfaces are one product.
+- [x] Match the existing visual language: dark glass, Instrument Serif headings,
+      monospace labels, kind-coloured glows.
+
+### Phase 2B acceptance criteria
+
+- The graph, timeline, and library show the same filtered memory set.
+- Search narrows all three views and shows lexical scores.
+- Selecting a memory highlights it everywhere and reveals its evidence.
+- Confirm, reject, pin, edit, and forget round-trip through the API and refresh
+  the surface.
+- The page works without a model key because memory is local.
+- The layout degrades to a single column on narrow screens.
+
+---
+
 ## Phase 2 — The Voice (implemented in this pass)
 
 - [x] Speak every answer with `speechSynthesis`, preferring a British English
@@ -563,6 +643,7 @@ ashra/
   agents/                   specialist registry, permission ceiling, child runner
   integrations/             MCP client, integration config, tool registration
   mcp_server.py             optional read-only MCP filesystem server
+  memory.py                 typed memory, lifecycle, retrieval, graph, health
   orchestrator.py           bounded tool loop + approval continuation
   chat.py                   answer + streaming pipeline
 data/                       local SQLite database (git-ignored)
@@ -571,6 +652,9 @@ viewer/
   app.js                    graph, camera, chat UI
   styles.css                cinematic UI + chat dock
   graph-data.js             generated graph data
+  brain.html                memory surface: graph, timeline, library
+  brain.js                  memory views, search, detail, lifecycle actions
+  brain.css                 brain layout and memory styling
 notes/                      private markdown knowledge base
 tests/                      unittest suite
 .github/workflows/ci.yml    GitHub Actions test matrix

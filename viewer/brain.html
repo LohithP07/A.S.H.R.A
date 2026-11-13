@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>A.S.H.R.A — The Brain</title>
+<meta name="description" content="A.S.H.R.A's memory: inspect, correct, and curate what your assistant knows.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="brain.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9C%A6%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+
+<div class="aurora" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+
+<header class="topbar">
+  <a class="brand" href="index.html" aria-label="A.S.H.R.A home">
+    <div class="brand-mark" aria-hidden="true">✦</div>
+    <div class="brand-text">
+      <p class="eyebrow">A.S.H.R.A · Private Memory</p>
+      <h1>The <em>Brain</em></h1>
+    </div>
+  </a>
+
+  <nav class="surfaces" aria-label="Surfaces">
+    <a href="index.html">Galaxy</a>
+    <a href="brain.html" class="active" aria-current="page">Brain</a>
+  </nav>
+
+  <div class="top-actions">
+    <div class="stats" aria-label="Memory statistics">
+      <div class="stat"><strong id="stat-total">0</strong><span>memories</span></div>
+      <div class="stat"><strong id="stat-proposed">0</strong><span>proposals</span></div>
+      <div class="stat"><strong id="stat-links">0</strong><span>links</span></div>
+    </div>
+    <button class="ghost-btn primary" id="new-memory" type="button">New memory</button>
+  </div>
+</header>
+
+<main class="brain-shell">
+
+  <aside class="rail rail-left" aria-label="Memory census and filters">
+    <section class="card">
+      <p class="card-kicker">Census</p>
+      <ul class="kind-list" id="kind-list"></ul>
+    </section>
+
+    <section class="card">
+      <p class="card-kicker">Lifecycle</p>
+      <div class="status-filters" id="status-filters" role="group" aria-label="Filter by status">
+        <button type="button" data-status="" class="active">All</button>
+        <button type="button" data-status="confirmed">Confirmed</button>
+        <button type="button" data-status="proposed">Proposed</button>
+        <button type="button" data-status="archived">Archived</button>
+        <button type="button" data-status="rejected">Rejected</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <p class="card-kicker">Health</p>
+      <ul class="health-list" id="health-list"></ul>
+      <div class="rail-actions">
+        <button class="rail-btn" id="ingest-notes" type="button">Ingest notes</button>
+        <button class="rail-btn" id="consolidate" type="button">Consolidate</button>
+      </div>
+    </section>
+  </aside>
+
+  <section class="workspace" aria-label="Memory views">
+    <div class="workspace-head">
+      <div class="tabs" role="tablist" aria-label="Memory views">
+        <button type="button" role="tab" data-view="graph" aria-selected="true" class="active">Graph</button>
+        <button type="button" role="tab" data-view="timeline" aria-selected="false">Timeline</button>
+        <button type="button" role="tab" data-view="library" aria-selected="false">Library</button>
+      </div>
+      <form class="search" id="search-form" role="search">
+        <span class="search-orb" aria-hidden="true"></span>
+        <label class="sr-only" for="search-input">Search memory</label>
+        <input id="search-input" type="search" maxlength="400" placeholder="Search what I know…" autocomplete="off">
+        <button type="submit">Search</button>
+        <button type="button" class="search-clear" id="search-clear" aria-label="Clear search" hidden>×</button>
+      </form>
+    </div>
+
+    <div class="view view-graph" id="view-graph" role="tabpanel" aria-label="Memory graph">
+      <canvas id="graph-canvas"></canvas>
+      <div class="graph-legend" id="graph-legend" aria-hidden="true"></div>
+      <p class="graph-hint" id="graph-hint">Drag to pan · scroll to zoom · click a node</p>
+      <div class="view-empty" id="graph-empty" hidden>
+        <p class="empty-title">No memories yet</p>
+        <p class="empty-copy">Say “remember that …” in the Galaxy, or ingest your notes to give the brain something to hold.</p>
+      </div>
+    </div>
+
+    <div class="view view-scroll" id="view-timeline" role="tabpanel" aria-label="Memory timeline" hidden></div>
+    <div class="view view-scroll" id="view-library" role="tabpanel" aria-label="Memory library" hidden></div>
+  </section>
+
+  <aside class="rail rail-right" id="detail" aria-label="Memory detail">
+    <div class="detail-empty" id="detail-empty">
+      <span class="detail-glyph" aria-hidden="true">◌</span>
+      <p>Select a memory to inspect its source, confidence, and connections.</p>
+    </div>
+
+    <div class="detail-body" id="detail-body" hidden>
+      <p class="detail-kicker">
+        <span class="kind-dot" id="detail-dot"></span>
+        <span id="detail-kind"></span>
+        <span class="detail-status" id="detail-status"></span>
+      </p>
+
+      <div class="detail-content-wrap">
+        <h2 class="detail-title" id="detail-title"></h2>
+        <p class="detail-content" id="detail-content"></p>
+        <form class="detail-edit" id="detail-edit" hidden>
+          <label class="sr-only" for="detail-edit-input">Edit memory</label>
+          <textarea id="detail-edit-input" rows="5" maxlength="2000"></textarea>
+          <div class="detail-edit-actions">
+            <button type="submit" class="detail-btn approve">Save</button>
+            <button type="button" class="detail-btn" id="detail-edit-cancel">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <dl class="detail-meta" id="detail-meta"></dl>
+      <div class="detail-entities" id="detail-entities"></div>
+
+      <div class="detail-actions" id="detail-actions">
+        <button class="detail-btn approve" id="action-confirm" type="button">Confirm</button>
+        <button class="detail-btn deny" id="action-reject" type="button">Reject</button>
+        <button class="detail-btn" id="action-pin" type="button">Pin</button>
+        <button class="detail-btn" id="action-edit" type="button">Edit</button>
+        <button class="detail-btn danger" id="action-forget" type="button">Forget</button>
+      </div>
+
+      <section class="related" aria-labelledby="related-heading">
+        <h3 id="related-heading">Related <span id="related-count"></span></h3>
+        <ul class="related-list" id="detail-related"></ul>
+      </section>
+    </div>
+  </aside>
+</main>
+
+<div class="composer" id="composer" hidden>
+  <div class="composer-card" role="dialog" aria-modal="true" aria-labelledby="composer-title">
+    <p class="card-kicker">Capture</p>
+    <h2 id="composer-title">Teach the brain</h2>
+    <p class="composer-hint">Propose keeps it pending your approval. Remember writes it as confirmed.</p>
+    <label class="sr-only" for="composer-text">Memory text</label>
+    <textarea id="composer-text" rows="4" maxlength="2000" placeholder="e.g. I prefer dark roast coffee, and I ship on Fridays."></textarea>
+    <div class="composer-row">
+      <label for="composer-kind">Kind</label>
+      <select id="composer-kind">
+        <option value="fact">Fact</option>
+        <option value="preference">Preference</option>
+        <option value="person">Person</option>
+        <option value="project">Project</option>
+        <option value="event">Event</option>
+        <option value="task">Task</option>
+        <option value="document">Document</option>
+        <option value="procedure">Procedure</option>
+        <option value="observation">Observation</option>
+      </select>
+    </div>
+    <div class="composer-actions">
+      <button class="detail-btn" id="composer-cancel" type="button">Cancel</button>
+      <button class="detail-btn" id="composer-propose" type="button">Propose</button>
+      <button class="detail-btn approve" id="composer-remember" type="button">Remember</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="brain.js"></script>
+</body>
+</html>

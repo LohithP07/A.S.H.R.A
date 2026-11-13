@@ -24,7 +24,7 @@ from typing import Any
 
 from .sessions import SESSION_RE
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 DEFAULT_TTL_SECONDS = 6 * 60 * 60
 DEFAULT_APPROVAL_TTL_SECONDS = 15 * 60
 DEFAULT_MAX_MESSAGES = 8
@@ -37,6 +37,7 @@ class Database:
         self.path = Path(path)
         self._lock = threading.RLock()
         self._initialized = False
+        self.fts_enabled = False
 
     # ------------------------------------------------------------------
     # connection / schema
@@ -117,8 +118,68 @@ class Database:
 
                     CREATE INDEX IF NOT EXISTS idx_approvals_status
                         ON approvals(status, created_at DESC);
+
+                    CREATE TABLE IF NOT EXISTS memories (
+                        id TEXT PRIMARY KEY,
+                        created_at REAL NOT NULL,
+                        updated_at REAL NOT NULL,
+                        last_seen_at REAL NOT NULL,
+                        kind TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        normalized TEXT NOT NULL,
+                        entities TEXT NOT NULL DEFAULT '[]',
+                        source TEXT NOT NULL DEFAULT 'manual',
+                        source_ref TEXT,
+                        confidence REAL NOT NULL DEFAULT 0.5,
+                        sensitivity TEXT NOT NULL DEFAULT 'normal',
+                        status TEXT NOT NULL DEFAULT 'proposed',
+                        pinned INTEGER NOT NULL DEFAULT 0,
+                        reinforcement INTEGER NOT NULL DEFAULT 1,
+                        metadata TEXT
+                    );
+
+                    CREATE INDEX IF NOT EXISTS idx_memories_status
+                        ON memories(status, created_at DESC);
+                    CREATE INDEX IF NOT EXISTS idx_memories_kind
+                        ON memories(kind, created_at DESC);
+                    CREATE INDEX IF NOT EXISTS idx_memories_source_ref
+                        ON memories(source_ref);
+
+                    CREATE TABLE IF NOT EXISTS memory_links (
+                        source TEXT NOT NULL,
+                        target TEXT NOT NULL,
+                        kind TEXT NOT NULL DEFAULT 'shared_entity',
+                        weight REAL NOT NULL DEFAULT 1.0,
+                        PRIMARY KEY (source, target, kind)
+                    );
+
+                    CREATE INDEX IF NOT EXISTS idx_memory_links_source
+                        ON memory_links(source);
+                    CREATE INDEX IF NOT EXISTS idx_memory_links_target
+                        ON memory_links(target);
+
+                    CREATE TABLE IF NOT EXISTS memory_events (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        memory_id TEXT NOT NULL,
+                        created_at REAL NOT NULL,
+                        event TEXT NOT NULL,
+                        detail TEXT
+                    );
+
+                    CREATE INDEX IF NOT EXISTS idx_memory_events_memory
+                        ON memory_events(memory_id, id);
                     """
                 )
+                # FTS5 is optional: some Python builds ship SQLite without it.
+                # The memory store falls back to a full scan when unavailable.
+                try:
+                    connection.execute(
+                        "CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts "
+                        "USING fts5(content, memory_id UNINDEXED)"
+                    )
+                    self.fts_enabled = True
+                except sqlite3.OperationalError:
+                    self.fts_enabled = False
                 connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             self._initialized = True
 

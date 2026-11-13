@@ -99,7 +99,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["notes"], 1)
-        self.assertEqual(payload["tools"], 5)
+        self.assertEqual(payload["tools"], 9)
         self.assertFalse(payload["configured"])
         self.assertNotIn("api_key", payload)
 

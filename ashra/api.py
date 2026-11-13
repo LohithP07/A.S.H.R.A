@@ -65,6 +65,8 @@ from .errors import (
     ToolNotFound,
 )
 from .integrations import IntegrationManager, load_integrations
+from .memory import MemoryStore
+from .notes import load_notes
 from .orchestrator import Orchestrator
 from .remember import append as append_capture
 from .remember import forget as forget_capture
@@ -73,7 +75,7 @@ from .remember import rename as rename_capture
 from .sessions import SESSION_RE
 from .tools import Permission, ToolRegistry, build_default_registry, parse_permission
 
-VERSION = "0.5.0"
+VERSION = "0.6.0"
 MAX_BODY_BYTES = 64 * 1024
 BLOCKED_NAMES = {"config.json", ".env", ".git"}
 
@@ -122,6 +124,37 @@ class ApprovalDecision(BaseModel):
     approve: bool = False
 
 
+class MemoryCreate(BaseModel):
+    content: str = ""
+    kind: str = "fact"
+    status: str = "proposed"
+    source: str = "manual"
+    source_ref: str | None = None
+    confidence: float | None = None
+    sensitivity: str | None = None
+    entities: list[str] = Field(default_factory=list)
+    pinned: bool = False
+
+
+class MemoryPropose(BaseModel):
+    text: str = ""
+    source: str = "manual"
+    source_ref: str | None = None
+
+
+class MemoryUpdate(BaseModel):
+    content: str | None = None
+    kind: str | None = None
+    pinned: bool | None = None
+    confidence: float | None = None
+    sensitivity: str | None = None
+    entities: list[str] | None = None
+
+
+class MemoryForget(BaseModel):
+    confirm: bool = False
+
+
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
@@ -152,7 +185,10 @@ def _error_code(exc: Exception) -> str:
     return "server_error"
 
 
-def _capture_payload(result: Any) -> dict[str, Any]:
+def _capture_payload(
+    result: Any,
+    memories: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     return {
         "ok": True,
         "title": result.title,
@@ -162,6 +198,7 @@ def _capture_payload(result: Any) -> dict[str, Any]:
         "reply": result.reply,
         "created": result.created,
         "source": result.source,
+        "memories": memories or [],
         "graph": result.graph,
     }
 
@@ -210,14 +247,20 @@ def create_app(
     orchestrator: Orchestrator | None = None,
     integrations: IntegrationManager | None = None,
     agents: AgentRegistry | None = None,
+    memory: MemoryStore | None = None,
     viewer_dir: Path | None = None,
 ) -> FastAPI:
     base = Path(base_dir or Path(__file__).resolve().parent.parent)
     viewer = Path(viewer_dir or base / "viewer")
     db = database or Database(base / "data" / "ashra.db")
     sessions = SQLiteSessionStore(db)
-    service = chat or ChatService(base, sessions=sessions)
-    tools = registry or build_default_registry(base, audit=_tool_audit(db))
+    memory_store = memory or MemoryStore(db)
+    service = chat or ChatService(base, sessions=sessions, memory=memory_store)
+    tools = registry or build_default_registry(
+        base,
+        audit=_tool_audit(db),
+        memory=memory_store,
+    )
 
     agent_registry = agents or AgentRegistry(build_default_agents())
     subagents: SubagentRunner | None = None
@@ -272,6 +315,7 @@ def create_app(
     app.state.integrations = integration_manager
     app.state.agents = agent_registry
     app.state.subagents = subagents
+    app.state.memory = memory_store
 
     # ------------------------------------------------------------------
     # middleware
@@ -377,6 +421,7 @@ def create_app(
         except OSError:
             pass
 
+        memory_stats = memory_store.stats()
         return {
             "status": "ok",
             "name": "A.S.H.R.A",
@@ -386,6 +431,8 @@ def create_app(
             "model": config.model if config else None,
             "config_error": config_error,
             "notes": note_count,
+            "memories": memory_stats["total"],
+            "memory_proposals": memory_stats["proposed"],
             "sessions": db.count_sessions(),
             "messages": db.count_messages(),
             "approvals": db.count_approvals(),
@@ -550,13 +597,28 @@ def create_app(
             )
         except ValueError as exc:
             return _error(400, "bad_capture", str(exc))
+        memories: list[dict[str, Any]] = []
+        try:
+            memories = memory_store.remember_explicit(
+                request_body.text,
+                source="capture",
+                source_ref=f"notes/{result.path}",
+            )
+        except ValueError:
+            # A credential-shaped capture still belongs in the vault, but it
+            # must never become long-term memory.
+            memories = []
         db.record_audit(
             "vault",
             "remember",
             request_id=_request_id(request),
-            detail={"path": result.path, "title": result.title},
+            detail={
+                "path": result.path,
+                "title": result.title,
+                "memories": [item.get("id") for item in memories],
+            },
         )
-        return _capture_payload(result)
+        return _capture_payload(result, memories)
 
     @app.post("/append")
     def append_endpoint(request_body: AppendRequest, request: Request):
@@ -619,6 +681,200 @@ def create_app(
             detail={"path": result.path, "title": result.title},
         )
         return _capture_payload(result)
+
+    # ------------------------------------------------------------------
+    # memory
+    # ------------------------------------------------------------------
+    @app.get("/memory")
+    def list_memory(
+        status: str | None = None,
+        kind: str | None = None,
+        pinned: bool | None = None,
+        limit: int = 200,
+    ) -> dict[str, Any]:
+        return {
+            "memories": memory_store.list(
+                status=status,
+                kind=kind,
+                pinned=pinned,
+                limit=limit,
+            ),
+            "stats": memory_store.stats(),
+        }
+
+    @app.get("/memory/stats")
+    def memory_stats() -> dict[str, Any]:
+        return memory_store.stats()
+
+    @app.get("/memory/proposals")
+    def memory_proposals(limit: int = 100) -> dict[str, Any]:
+        return {
+            "memories": memory_store.list(status="proposed", limit=limit),
+            "stats": memory_store.stats(),
+        }
+
+    @app.get("/memory/search")
+    def memory_search(
+        q: str = "",
+        limit: int = 12,
+        status: str | None = "confirmed",
+        kind: str | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "query": q,
+            "memories": memory_store.search(
+                q,
+                limit=limit,
+                status=status,
+                kind=kind,
+            ),
+        }
+
+    @app.get("/memory/graph")
+    def memory_graph(status: str | None = None, limit: int = 500) -> dict[str, Any]:
+        return memory_store.graph(status=status, limit=limit)
+
+    @app.get("/memory/timeline")
+    def memory_timeline(status: str | None = None, limit: int = 120) -> dict[str, Any]:
+        return {"memories": memory_store.timeline(status=status, limit=limit)}
+
+    @app.post("/memory")
+    def create_memory(body: MemoryCreate, request: Request) -> Any:
+        try:
+            item = memory_store.add(
+                body.content,
+                kind=body.kind,
+                status=body.status,
+                source=body.source,
+                source_ref=body.source_ref,
+                confidence=body.confidence,
+                sensitivity=body.sensitivity,
+                entities=body.entities or None,
+                pinned=body.pinned,
+            )
+        except ValueError as exc:
+            return _error(400, "bad_memory", str(exc))
+        db.record_audit(
+            "memory",
+            "create",
+            status=item.get("status", "proposed"),
+            request_id=_request_id(request),
+            detail={"memory_id": item.get("id"), "kind": item.get("kind")},
+        )
+        return {"memory": item}
+
+    @app.post("/memory/propose")
+    def propose_memory(body: MemoryPropose, request: Request) -> Any:
+        try:
+            items = memory_store.propose_from_text(
+                body.text,
+                source=body.source,
+                source_ref=body.source_ref,
+            )
+        except ValueError as exc:
+            return _error(400, "bad_memory", str(exc))
+        db.record_audit(
+            "memory",
+            "propose",
+            request_id=_request_id(request),
+            detail={"count": len(items), "ids": [item.get("id") for item in items]},
+        )
+        return {"memories": items, "count": len(items)}
+
+    @app.post("/memory/ingest")
+    def ingest_memory(request: Request) -> dict[str, Any]:
+        result = memory_store.ingest_notes(load_notes())
+        db.record_audit(
+            "memory",
+            "ingest",
+            request_id=_request_id(request),
+            detail=result,
+        )
+        return {"ok": True, **result}
+
+    @app.post("/memory/consolidate")
+    def consolidate_memory(request: Request) -> dict[str, Any]:
+        result = memory_store.consolidate()
+        db.record_audit(
+            "memory",
+            "consolidate",
+            request_id=_request_id(request),
+            detail=result,
+        )
+        return {"ok": True, **result}
+
+    @app.get("/memory/{memory_id}")
+    def get_memory(memory_id: str) -> Any:
+        item = memory_store.get(memory_id)
+        if item is None:
+            return _error(404, "not_found", "No such memory.")
+        return {"memory": item, "related": memory_store.related(memory_id)}
+
+    @app.post("/memory/{memory_id}/confirm")
+    def confirm_memory(memory_id: str, request: Request) -> Any:
+        item = memory_store.confirm(memory_id)
+        if item is None:
+            return _error(404, "not_found", "No such memory.")
+        db.record_audit(
+            "memory",
+            "confirm",
+            request_id=_request_id(request),
+            detail={"memory_id": memory_id},
+        )
+        return {"memory": item}
+
+    @app.post("/memory/{memory_id}/reject")
+    def reject_memory(memory_id: str, request: Request) -> Any:
+        item = memory_store.reject(memory_id)
+        if item is None:
+            return _error(404, "not_found", "No such memory.")
+        db.record_audit(
+            "memory",
+            "reject",
+            request_id=_request_id(request),
+            detail={"memory_id": memory_id},
+        )
+        return {"memory": item}
+
+    @app.patch("/memory/{memory_id}")
+    def update_memory(memory_id: str, body: MemoryUpdate, request: Request) -> Any:
+        changes = body.model_dump(exclude_unset=True)
+        try:
+            item = memory_store.update(memory_id, **changes)
+        except ValueError as exc:
+            return _error(400, "bad_memory", str(exc))
+        if item is None:
+            return _error(404, "not_found", "No such memory.")
+        db.record_audit(
+            "memory",
+            "update",
+            request_id=_request_id(request),
+            detail={"memory_id": memory_id, "fields": sorted(changes)},
+        )
+        return {"memory": item}
+
+    @app.post("/memory/{memory_id}/forget")
+    def forget_memory(
+        memory_id: str,
+        body: MemoryForget,
+        request: Request,
+    ) -> Any:
+        if body.confirm is not True:
+            return _error(
+                400,
+                "confirmation_required",
+                "Forgetting a memory needs confirmation.",
+            )
+        removed = memory_store.forget(memory_id)
+        if not removed:
+            return _error(404, "not_found", "No such memory.")
+        db.record_audit(
+            "memory",
+            "forget",
+            request_id=_request_id(request),
+            detail={"memory_id": memory_id},
+        )
+        return {"ok": True, "forgotten": memory_id}
 
     # ------------------------------------------------------------------
     # sessions, tools, audit

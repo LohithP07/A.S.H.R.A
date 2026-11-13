@@ -16,9 +16,11 @@ import re
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from .config import AppConfig, load_config
 from .errors import NotConfiguredError
+from .memory import MemoryStore
 from .notes import Note, load_notes
 from .persona import compose_system_prompt, small_talk_reply
 from .providers import ChatProvider, make_provider
@@ -45,6 +47,7 @@ class Prepared:
     config: AppConfig
     history: list[dict[str, str]]
     matches: list[ScoredNote]
+    memories: tuple[dict[str, Any], ...] = ()
     immediate: ChatResult | None = None
 
 
@@ -59,12 +62,14 @@ class ChatService:
         sessions: SessionBackend | None = None,
         notes_loader: Callable[[], list[Note]] = load_notes,
         provider_factory: Callable[[AppConfig], ChatProvider] = make_provider,
+        memory: MemoryStore | None = None,
     ) -> None:
         self.base_dir = base_dir
         self.config_path = base_dir / "config.json"
         self.sessions = sessions or SessionStore()
         self.notes_loader = notes_loader
         self.provider_factory = provider_factory
+        self.memory = memory
 
     # ------------------------------------------------------------------
     # shared pipeline
@@ -154,17 +159,27 @@ class ChatService:
             limit=config.max_notes,
         )
 
+        memories: tuple[dict[str, Any], ...] = ()
+        if self.memory is not None and config.max_memories > 0:
+            memories = tuple(
+                self.memory.search(question, limit=config.max_memories)
+            )
+
         return _Prepared(
             question=question,
             session_id=session_id,
             config=config,
             history=history,
             matches=matches,
+            memories=memories,
         )
 
     @staticmethod
-    def _sources(matches: list[ScoredNote]) -> list[dict[str, object]]:
-        return [
+    def _sources(
+        matches: list[ScoredNote],
+        memories: tuple[dict[str, Any], ...] = (),
+    ) -> list[dict[str, object]]:
+        sources: list[dict[str, object]] = [
             {
                 "id": item.note.id,
                 "label": item.note.label,
@@ -174,6 +189,18 @@ class ChatService:
             }
             for item in matches
         ]
+        for memory in memories:
+            sources.append(
+                {
+                    "id": memory.get("id"),
+                    "label": str(memory.get("kind") or "memory").title(),
+                    "title": memory.get("label") or memory.get("content"),
+                    "path": memory.get("source_ref") or "",
+                    "kind": "memory",
+                    "score": memory.get("score"),
+                }
+            )
+        return sources
 
     # ------------------------------------------------------------------
     # complete answer
@@ -183,8 +210,8 @@ class ChatService:
         if prepared.immediate is not None:
             return prepared.immediate
 
-        if not prepared.matches:
-            answer = "I don't have a note that covers that."
+        if not prepared.matches and not prepared.memories:
+            answer = "I don't have a note or memory that covers that."
             self.sessions.append_exchange(prepared.session_id, prepared.question, answer)
             return ChatResult(
                 answer=answer,
@@ -194,7 +221,11 @@ class ChatService:
                 model=prepared.config.model,
             )
 
-        system = build_system_prompt(prepared.matches, prepared.config)
+        system = build_system_prompt(
+            prepared.matches,
+            prepared.config,
+            prepared.memories,
+        )
         messages = prepared.history + [
             {"role": "user", "content": prepared.question}
         ]
@@ -205,7 +236,7 @@ class ChatService:
         return ChatResult(
             answer=answer,
             nodes=[item.note.id for item in prepared.matches],
-            sources=self._sources(prepared.matches),
+            sources=self._sources(prepared.matches, prepared.memories),
             session_id=prepared.session_id,
             model=prepared.config.model,
         )
@@ -229,8 +260,8 @@ class ChatService:
             yield from self._stream_result(prepared.immediate)
             return
 
-        if not prepared.matches:
-            answer = "I don't have a note that covers that."
+        if not prepared.matches and not prepared.memories:
+            answer = "I don't have a note or memory that covers that."
             self.sessions.append_exchange(prepared.session_id, prepared.question, answer)
             yield from self._stream_result(
                 ChatResult(
@@ -243,11 +274,15 @@ class ChatService:
             )
             return
 
-        sources = self._sources(prepared.matches)
+        sources = self._sources(prepared.matches, prepared.memories)
         nodes = [item.note.id for item in prepared.matches]
         yield {"event": "sources", "sources": sources, "nodes": nodes}
 
-        system = build_system_prompt(prepared.matches, prepared.config)
+        system = build_system_prompt(
+            prepared.matches,
+            prepared.config,
+            prepared.memories,
+        )
         messages = prepared.history + [
             {"role": "user", "content": prepared.question}
         ]
@@ -291,7 +326,11 @@ def _chunks(text: str) -> Iterator[str]:
         yield match.group(0)
 
 
-def build_system_prompt(matches: list[ScoredNote], config: AppConfig) -> str:
+def build_system_prompt(
+    matches: list[ScoredNote],
+    config: AppConfig,
+    memories: tuple[dict[str, Any], ...] = (),
+) -> str:
     blocks: list[str] = []
 
     for index, item in enumerate(matches, start=1):
@@ -303,4 +342,19 @@ def build_system_prompt(matches: list[ScoredNote], config: AppConfig) -> str:
         blocks.append(text)
         blocks.append("")
 
-    return compose_system_prompt("\n".join(blocks))
+    memory_blocks: list[str] = []
+    for memory in memories:
+        kind = str(memory.get("kind") or "memory")
+        confidence = float(memory.get("confidence") or 0.0)
+        source = str(memory.get("source") or "memory")
+        content = str(memory.get("content") or "").strip()
+        if not content:
+            continue
+        memory_blocks.append(
+            f"- [{kind} · {confidence:.2f} · {source}] {content}"
+        )
+
+    return compose_system_prompt(
+        "\n".join(blocks),
+        "\n".join(memory_blocks),
+    )

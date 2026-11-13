@@ -43,6 +43,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.concurrency import iterate_in_threadpool, run_in_threadpool
+from starlette.middleware.gzip import GZipMiddleware
 
 from .agents import (
     SPAWN_TOOL_NAME,
@@ -75,7 +76,7 @@ from .remember import rename as rename_capture
 from .sessions import SESSION_RE
 from .tools import Permission, ToolRegistry, build_default_registry, parse_permission
 
-VERSION = "0.7.0"
+VERSION = "0.7.1"
 MAX_BODY_BYTES = 64 * 1024
 BLOCKED_NAMES = {"config.json", ".env", ".git"}
 
@@ -323,6 +324,10 @@ def create_app(
     app.state.subagents = subagents
     app.state.memory = memory_store
 
+    # Compress large static assets and JSON.  Event streams are excluded by
+    # Starlette's default content-type filter, so SSE still flushes per token.
+    app.add_middleware(GZipMiddleware, minimum_size=1024)
+
     # ------------------------------------------------------------------
     # middleware
     # ------------------------------------------------------------------
@@ -346,7 +351,15 @@ def create_app(
 
         response = await call_next(request)
         response.headers["X-Request-ID"] = request_id
-        response.headers["Cache-Control"] = "no-store, max-age=0"
+        # Static viewer assets may be cached; API responses may not.  Vendor
+        # libraries are pinned by a version query string, so they are safe to
+        # keep for a year.  HTML/CSS/JS revalidate, which is a cheap 304.
+        if path.startswith("/vendor/"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        elif path == "/" or path.endswith((".html", ".css", ".js", ".svg", ".png")):
+            response.headers["Cache-Control"] = "no-cache"
+        else:
+            response.headers["Cache-Control"] = "no-store, max-age=0"
         response.headers["X-Content-Type-Options"] = "nosniff"
         logger.info("%s %s -> %s [%s]", request.method, path, response.status_code, request_id)
         return response

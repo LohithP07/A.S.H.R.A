@@ -917,13 +917,13 @@
   function beginIntro() {
     if (introStarted) return;
     introStarted = true;
-    homeView(reduceMotion ? 1 : 1900);
+    homeView(reduceMotion ? 1 : 1300);
     window.setTimeout(() => {
       loader.classList.add('done');
-      window.setTimeout(() => loader.classList.add('removed'), 1300);
+      window.setTimeout(() => loader.classList.add('removed'), 700);
       scheduleDrift(1500);
-    }, reduceMotion ? 250 : 2000);
-    window.setTimeout(applyDeepLink, reduceMotion ? 120 : 3500);
+    }, reduceMotion ? 120 : 450);
+    window.setTimeout(applyDeepLink, reduceMotion ? 120 : 1600);
   }
 
   function applyDeepLink() {
@@ -2071,19 +2071,10 @@
 
   async function boot() {
     try {
-      await Promise.race([
-        document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve(),
-        new Promise((resolve) => window.setTimeout(resolve, 900))
-      ]);
-    } catch (error) {
-      /* Fonts are optional. */
-    }
-
-    try {
       initGraph();
       window.requestAnimationFrame(animate);
-      window.setTimeout(beginIntro, reduceMotion ? 120 : 900);
-      window.setTimeout(() => beginIntro(), 4200);
+      window.setTimeout(beginIntro, reduceMotion ? 60 : 180);
+      window.setTimeout(() => beginIntro(), 2600);
     } catch (error) {
       console.error(error);
       fail(`The galaxy could not be rendered: ${error.message}`);

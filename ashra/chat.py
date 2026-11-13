@@ -37,13 +37,19 @@ class ChatResult:
 
 
 @dataclass(frozen=True)
-class _Prepared:
+class Prepared:
+    """Everything retrieval and configuration decided before the model runs."""
+
     question: str
     session_id: str
     config: AppConfig
     history: list[dict[str, str]]
     matches: list[ScoredNote]
     immediate: ChatResult | None = None
+
+
+# Backwards-compatible alias for the original private name.
+_Prepared = Prepared
 
 
 class ChatService:
@@ -63,7 +69,15 @@ class ChatService:
     # ------------------------------------------------------------------
     # shared pipeline
     # ------------------------------------------------------------------
-    def _prepare(self, question: str, session_id: str | None) -> _Prepared:
+    def prepare(self, question: str, session_id: str | None = None) -> Prepared:
+        """Run retrieval and configuration without calling the model.
+
+        The orchestrator uses this so tool-calling and plain answers share one
+        grounding path.
+        """
+        return self._prepare(question, session_id)
+
+    def _prepare(self, question: str, session_id: str | None) -> Prepared:
         question = " ".join(question.split()).strip()
         if not question:
             raise ValueError("Ask a question first.")

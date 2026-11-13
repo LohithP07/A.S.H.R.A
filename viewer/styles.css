@@ -297,6 +297,45 @@ button:focus-visible { outline: 1px solid #b9a7ff; outline-offset: 4px; }
   background: rgba(73, 54, 118, 0.4);
 }
 
+.chat-approval {
+  margin: 12px 0 0;
+  padding-top: 11px;
+  border-top: 1px solid rgba(167, 139, 250, 0.18);
+}
+.chat-approval[hidden] { display: none; }
+.chat-approval-text {
+  margin: 0 0 9px;
+  color: #c7d3e6;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.chat-approval-text code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(151, 174, 207, 0.12);
+  color: #e9e2ff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10.5px;
+}
+.chat-approval-actions { display: flex; gap: 8px; }
+.approval-btn {
+  padding: 7px 14px;
+  border: 1px solid rgba(151, 174, 207, 0.25);
+  border-radius: 999px;
+  background: rgba(18, 25, 39, 0.72);
+  color: #dbe5f5;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.approval-btn.approve { border-color: rgba(110, 231, 183, 0.45); color: #a7f3d0; }
+.approval-btn.approve:hover:not(:disabled) { background: rgba(16, 185, 129, 0.18); }
+.approval-btn.deny { border-color: rgba(248, 113, 113, 0.4); color: #fecaca; }
+.approval-btn.deny:hover:not(:disabled) { background: rgba(185, 28, 28, 0.18); }
+.approval-btn:disabled { opacity: 0.45; cursor: wait; }
+
 .chat-form {
   display: flex;
   align-items: center;

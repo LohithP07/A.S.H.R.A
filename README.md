@@ -59,8 +59,8 @@ Open a browser to http://127.0.0.1:4700/ to see the A.S.H.R.A UI.
 |----------|--------|---------|-------|
 | `/health` | GET | - | Liveness, version, and server time |
 | `/status` | GET | - | Provider, vault, session, and tool summary |
-| `/chat` | POST | `{ "question": "...", "session_id": "optional" }` | Ask the LLM; returns answer, sources, and note ids |
-| `/chat/stream` | POST | `{ "question": "...", "session_id": "optional" }` | Same answer as server-sent events (`start`, `sources`, `token`, `done`, `error`) |
+| `/chat` | POST | `{ "question": "...", "session_id": "optional", "permission": "read" }` | Runs the tool loop; returns answer, sources, note ids, and any pending approval |
+| `/chat/stream` | POST | same as `/chat` | Server-sent events (`start`, `sources`, `tool_call`, `tool_result`, `approval_required`, `token`, `done`, `error`) |
 | `/remember` | POST | `{ "text": "...", "source": "typed" }` | Create a new capture |
 | `/append` | POST | `{ "text": "...", "last": true, "path": "note.md" }` | Append to an existing capture |
 | `/rename` | POST | `{ "title": "New title", "last": true, "path": "note.md" }` | Rename a capture |
@@ -68,6 +68,8 @@ Open a browser to http://127.0.0.1:4700/ to see the A.S.H.R.A UI.
 | `/sessions/{id}` | GET | - | Persisted conversation history for one session |
 | `/tools` | GET | `?permission=read` | Tools available at a permission level |
 | `/tools/invoke` | POST | `{ "name": "...", "arguments": {}, "permission": "read", "approved": false }` | Invoke a tool through the permission gate |
+| `/approvals` | GET | `?status=pending&limit=50` | Pending and recent approval requests |
+| `/approvals/{id}` | POST | `{ "approve": true }` | Approve or deny a pending tool call and resume the answer |
 | `/audit` | GET | `?limit=50&event=chat` | Recent audit events |
 | `/rebuild` | POST | - | Rebuild `viewer/graph-data.js` from the notes vault |
 
@@ -89,6 +91,14 @@ Tools declare a permission tier and whether they need approval:
 | `admin` | Destructive or configuration-level work |
 
 The default tool pack is `fs_list`, `fs_read`, and `fs_search`, scoped to `notes/`. `vault_remember` and `vault_append` require `act` permission plus `approved: true`. Paths cannot escape the vault, and blocked names such as `config.json`, `.env`, and `.git` are never exposed.
+
+### Tool-calling orchestrator
+
+`/chat` and `/chat/stream` run a bounded loop: retrieve notes, ask the model, execute any tools it requests through the permission gate, feed the results back, and repeat. The loop stops after six model turns, so a confused model cannot run forever.
+
+Chat requests carry a `permission` tier (`read` by default; the viewer sends `act`). Read tools run immediately. A state-changing tool that requires approval does not run: the orchestrator stores the pending call in `data/ashra.db`, emits `approval_required`, and returns `status: "awaiting_approval"`. Approving the call through `POST /approvals/{id}` executes it and resumes the answer with the saved conversation state.
+
+Providers that do not implement tool calling still answer normally, just without tools. The Anthropic and OpenAI-compatible providers both support tool schemas and tool results.
 
 ### MCP filesystem server
 
@@ -123,7 +133,9 @@ Each capture contains simple frontmatter with `created` and `source`, an H1 titl
 ## Features
 
 - Chat with your notes: `POST /chat` builds a graph of related notes and asks the LLM.
+- Tool-calling loop: the assistant can search and read the vault on its own, then answer.
 - Streaming answers: `POST /chat/stream` sends sources first, then word-sized tokens.
+- Approval gate: state-changing tools pause for a click in the viewer before running.
 - Automatic graph generation: `build.py` produces `viewer/graph-data.js` from all notes.
 - Note CRUD through `/remember`, `/append`, `/rename`, and `/forget`.
 - Durable sessions and an audit log in local SQLite.
@@ -153,7 +165,8 @@ To add a new note category:
 - `server.py` - Uvicorn entrypoint and startup banner.
 - `ashra/api.py` - FastAPI routes, SSE streaming, request IDs, and error mapping.
 - `ashra/chat.py` - `ChatService.ask()` and `ChatService.stream()` share retrieval and provider logic.
-- `ashra/db.py` - SQLite sessions, messages, and audit events.
+- `ashra/orchestrator.py` - bounded tool-calling loop and approval continuation.
+- `ashra/db.py` - SQLite sessions, messages, approvals, and audit events.
 - `ashra/tools.py` - permission tiers, tool registry, and scoped filesystem tools.
 - `ashra/mcp_server.py` - optional read-only MCP server for the notes vault.
 - `ashra/remember.py` - captures, appends, renames, and deletes note files.

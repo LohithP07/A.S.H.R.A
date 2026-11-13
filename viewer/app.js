@@ -978,6 +978,10 @@
   const chatSources = $('chat-sources');
   const chatStatus = $('chat-status');
   const chatMic = $('chat-mic');
+  const chatApproval = $('chat-approval');
+  const chatApprovalText = $('chat-approval-text');
+  const chatApprove = $('chat-approve');
+  const chatDeny = $('chat-deny');
 
   function readSessionId() {
     try {
@@ -1003,6 +1007,7 @@
   }
 
   let chatSessionId = readSessionId();
+  let pendingApproval = null;
 
   function setChatStatus(text, kind = '') {
     if (!chatStatus) return;
@@ -1080,6 +1085,101 @@
     chatSources.replaceChildren();
     chatCard.classList.remove('error');
     chatCard.hidden = false;
+    clearApproval();
+  }
+
+  function clearApproval() {
+    pendingApproval = null;
+    if (chatApproval) chatApproval.hidden = true;
+    if (chatApprovalText) chatApprovalText.replaceChildren();
+    setApprovalBusy(false);
+  }
+
+  function setApprovalBusy(busy) {
+    if (chatApprove) chatApprove.disabled = busy;
+    if (chatDeny) chatDeny.disabled = busy;
+  }
+
+  function describeArguments(value) {
+    try {
+      const text = JSON.stringify(value || {});
+      return text.length > 180 ? `${text.slice(0, 177)}…` : text;
+    } catch (error) {
+      return '{}';
+    }
+  }
+
+  function showApproval(approval) {
+    if (!approval || !chatApproval || !chatApprovalText) return;
+    pendingApproval = approval;
+    const tool = String(approval.tool || 'a tool');
+    const args = describeArguments(approval.arguments);
+
+    chatApprovalText.replaceChildren();
+    chatApprovalText.append('A.S.H.R.A wants to run ');
+    const toolCode = document.createElement('code');
+    toolCode.textContent = tool;
+    chatApprovalText.append(toolCode);
+    chatApprovalText.append(' with ');
+    const argsCode = document.createElement('code');
+    argsCode.textContent = args;
+    chatApprovalText.append(argsCode);
+    chatApprovalText.append('. Approve this action?');
+
+    chatApproval.hidden = false;
+    if (chatCard) chatCard.hidden = false;
+  }
+
+  async function decideApproval(approve) {
+    if (!pendingApproval) return;
+    const approval = pendingApproval;
+    setApprovalBusy(true);
+    setChatStatus(approve ? '● running approved action…' : '● cancelling…', 'busy');
+
+    try {
+      const response = await fetch(`/approvals/${encodeURIComponent(approval.id)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approve: Boolean(approve) })
+      });
+
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (error) {
+        data = null;
+      }
+
+      if (!response.ok) {
+        const detail = data && (data.detail || data.error);
+        throw new Error(detail || `A.S.H.R.A returned HTTP ${response.status}.`);
+      }
+
+      clearApproval();
+      if (data && data.session_id) {
+        chatSessionId = data.session_id;
+        writeSessionId(chatSessionId);
+      }
+
+      const answer = data && typeof data.answer === 'string' && data.answer
+        ? data.answer
+        : 'Done.';
+      showChatCard(answer, (data && data.sources) || [], false);
+      revealSources((data && data.nodes) || []);
+      setChatStatus(CHAT_HINT);
+      speakAnswer(answer);
+    } catch (error) {
+      clearApproval();
+      showChatCard(
+        error.message || 'A.S.H.R.A could not complete that action.',
+        'Check the server log.',
+        true
+      );
+      setChatStatus('● approval failed', 'error');
+    } finally {
+      setApprovalBusy(false);
+      if (chatInput) chatInput.focus();
+    }
   }
 
   function appendChatAnswer(text) {
@@ -1600,7 +1700,8 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         question,
-        session_id: chatSessionId || null
+        session_id: chatSessionId || null,
+        permission: 'act'
       })
     });
 
@@ -1627,6 +1728,7 @@
     let nodes = [];
     let sources = [];
     let sawDone = false;
+    let pending = null;
 
     beginChatCard();
 
@@ -1657,6 +1759,9 @@
             const text = typeof event.text === 'string' ? event.text : '';
             answer += text;
             appendChatAnswer(text);
+          } else if (event.event === 'approval_required') {
+            pending = event.approval || null;
+            if (pending) showApproval(pending);
           } else if (event.event === 'done') {
             sawDone = true;
             if (event.session_id) {
@@ -1670,6 +1775,10 @@
             }
             if (Array.isArray(event.nodes)) nodes = event.nodes;
             if (Array.isArray(event.sources)) sources = event.sources;
+            if (event.pending_approval) {
+              pending = event.pending_approval;
+              showApproval(pending);
+            }
             renderSources(sources);
             revealSources(nodes);
           } else if (event.event === 'error') {
@@ -1689,7 +1798,8 @@
       answer,
       session_id: sessionId,
       nodes,
-      sources
+      sources,
+      pending
     };
   }
 
@@ -1712,6 +1822,10 @@
     try {
       const streamed = await streamAnswer(cleaned);
       if (streamed) {
+        if (streamed.pending) {
+          setChatStatus('● awaiting your approval', 'busy');
+          return;
+        }
         setChatStatus(CHAT_HINT);
         speakAnswer(streamed.answer);
         return;
@@ -1723,7 +1837,8 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           question: cleaned,
-          session_id: chatSessionId || null
+          session_id: chatSessionId || null,
+          permission: 'act'
         })
       });
 
@@ -1781,6 +1896,13 @@
       chatInput.value = '';
       askAshra(question);
     });
+  }
+
+  if (chatApprove) {
+    chatApprove.addEventListener('click', () => decideApproval(true));
+  }
+  if (chatDeny) {
+    chatDeny.addEventListener('click', () => decideApproval(false));
   }
 
   if (chatMic) {

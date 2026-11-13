@@ -89,14 +89,15 @@ viewer/ (public)
   app.js  ── POST /chat, /chat/stream ──┐
   styles.css              │
                           ▼
-server.py (Uvicorn) ── ashra/api.py ── ashra/chat.py
-                             ├── notes.py      load + clean markdown
-                             ├── retrieval.py  keyword scoring -> top 6
-                             ├── sessions.py   store protocol + in-memory
-                             ├── db.py         SQLite sessions + audit
-                             ├── tools.py      permissions + registry
-                             ├── providers.py  Anthropic / NVIDIA NIM
-                             └── config.py     config.json validation
+server.py (Uvicorn) ── ashra/api.py ── ashra/orchestrator.py
+                                        ├── chat.py       retrieval + prompt pipeline
+                                        ├── tools.py      permissions + registry
+                                        ├── db.py         SQLite sessions, approvals + audit
+                                        ├── notes.py      load + clean markdown
+                                        ├── retrieval.py  keyword scoring -> top 6
+                                        ├── sessions.py   store protocol + in-memory
+                                        ├── providers.py  Anthropic / NVIDIA NIM + tools
+                                        └── config.py     config.json validation
 
 ashra/mcp_server.py ── scoped read-only filesystem tools
 ```
@@ -228,6 +229,41 @@ ashra/mcp_server.py ── scoped read-only filesystem tools
   failing silently.
 - Follow-up questions in the same tab use the short server-side history.
 - No secret appears in browser DevTools, HTML, or a served file.
+
+---
+
+## Phase 1C — The Orchestrator (complete)
+
+- [x] Add a bounded tool-calling loop in `ashra/orchestrator.py`
+      (six model turns, six tool calls per turn).
+- [x] Share retrieval and grounding with `ChatService.prepare()` so tool answers
+      use the same note context as plain answers.
+- [x] Add provider tool support for Anthropic (`tools` / `tool_use`) and
+      OpenAI-compatible endpoints (`tools` / `tool_calls`).
+- [x] Convert `ToolSpec` schemas to each provider's tool format.
+- [x] Filter advertised tools by the caller's permission tier.
+- [x] Execute tool calls through `ToolRegistry` and feed success or error
+      outcomes back to the model.
+- [x] Add a persisted approval queue (`approvals` table) for state-changing
+      tools, with atomic approve/deny and a 15-minute expiry.
+- [x] Add `GET /approvals`, `GET /approvals/{id}`, and `POST /approvals/{id}`.
+- [x] Add `tool_call`, `tool_result`, and `approval_required` SSE events, plus
+      `status` on the `done` event.
+- [x] Resume a paused answer from saved conversation state after approval, and
+      cancel cleanly on denial.
+- [x] Add the approval prompt and Approve/Deny buttons to the viewer.
+- [x] Fall back to a single model call when a provider has no tool support.
+- [x] Audit tool calls, approval creation, and approval decisions.
+- [x] Test the loop, bounds, approvals, denial, resume, schemas, and API paths.
+
+### Phase 1C acceptance criteria
+
+- A question that needs the vault runs `fs_search` without being told to.
+- A state-changing tool pauses with `status: "awaiting_approval"` and writes
+  nothing until `POST /approvals/{id}` approves it.
+- Denying the approval runs no tool and returns a clear answer.
+- The loop stops at six steps with a readable message instead of spinning.
+- A provider without tool support still answers as it did in Phase 1B.
 
 ---
 
@@ -444,7 +480,7 @@ ashra/
   __init__.py               package exports
   api.py                    FastAPI routes, SSE, request IDs, error mapping
   config.py                 config validation
-  db.py                     SQLite sessions, messages, audit events
+  db.py                     SQLite sessions, messages, approvals, audit events
   notes.py                  note loading
   retrieval.py              keyword scoring
   sessions.py               conversation-store protocol + in-memory store
@@ -454,6 +490,7 @@ ashra/
   remember.py               capture CRUD + graph rebuild
   tools.py                  permission tiers + tool registry + scoped filesystem
   mcp_server.py             optional read-only MCP filesystem server
+  orchestrator.py           bounded tool loop + approval continuation
   chat.py                   answer + streaming pipeline
 data/                       local SQLite database (git-ignored)
 viewer/

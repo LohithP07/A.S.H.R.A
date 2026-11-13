@@ -9,10 +9,11 @@ from .chat import ChatResult, ChatService
 from .config import AppConfig, load_config
 from .db import Database, SQLiteSessionStore
 from .errors import BrainError, ConfigError, NotConfiguredError, ProviderError
+from .integrations import IntegrationConfig, IntegrationManager, load_integrations
 from .orchestrator import Orchestrator, OrchestratorResult
 from .tools import Permission, ToolRegistry, build_default_registry
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 __all__ = [
     "AppConfig",
@@ -21,6 +22,8 @@ __all__ = [
     "ChatService",
     "ConfigError",
     "Database",
+    "IntegrationConfig",
+    "IntegrationManager",
     "NotConfiguredError",
     "Orchestrator",
     "OrchestratorResult",
@@ -30,4 +33,5 @@ __all__ = [
     "ToolRegistry",
     "build_default_registry",
     "load_config",
+    "load_integrations",
 ]

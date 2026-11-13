@@ -7,5 +7,6 @@
   "max_history": 8,
   "max_tokens": 2048,
   "temperature": 0.2,
-  "note_chars": 4000
+  "note_chars": 4000,
+  "integrations": []
 }

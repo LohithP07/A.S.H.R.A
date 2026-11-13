@@ -92,6 +92,7 @@ viewer/ (public)
 server.py (Uvicorn) ── ashra/api.py ── ashra/orchestrator.py
                                         ├── chat.py       retrieval + prompt pipeline
                                         ├── tools.py      permissions + registry
+                                        ├── integrations/ MCP client + tool registration
                                         ├── db.py         SQLite sessions, approvals + audit
                                         ├── notes.py      load + clean markdown
                                         ├── retrieval.py  keyword scoring -> top 6
@@ -264,6 +265,38 @@ ashra/mcp_server.py ── scoped read-only filesystem tools
 - Denying the approval runs no tool and returns a clear answer.
 - The loop stops at six steps with a readable message instead of spinning.
 - A provider without tool support still answers as it did in Phase 1B.
+
+---
+
+## Phase 1D — MCP integrations (complete)
+
+- [x] Add `ashra/integrations/` with config parsing, an MCP client boundary, and
+      an integration manager.
+- [x] Support `stdio` and streamable HTTP transports against MCP 1.x and 2.x.
+- [x] Read the optional `integrations` array from `config.json`, with validation
+      for names, transports, commands, URLs, timeouts, and env.
+- [x] Enforce read-only integrations in Phase 1D; write permissions are rejected
+      until the draft/act layer exists.
+- [x] Probe every enabled server at startup and record per-server health.
+- [x] Register remote tools as namespaced `ToolSpec`s (`gmail_search`) under the
+      caller's permission tier.
+- [x] Keep a broken server from blocking chat or other integrations.
+- [x] Add `GET /integrations` and `GET /integrations/{name}`.
+- [x] Include integration status in `GET /status`.
+- [x] Audit remote tool calls through the existing registry audit path.
+- [x] Test config parsing, failure isolation, namespacing, registration, API
+      paths, and a real stdio round-trip against `ashra.mcp_server`.
+
+### Phase 1D acceptance criteria
+
+- A configured read-only MCP server appears in `GET /integrations` with its
+  tools and connection state.
+- Its tools are listed by `GET /tools` and callable through `POST /tools/invoke`.
+- A dead server reports an error in `/integrations` while the rest of A.S.H.R.A
+  keeps working.
+- `permission: "act"` on an integration is rejected with a clear config error.
+- The full suite passes with and without the MCP SDK installed (the real SDK
+  test skips when it is absent).
 
 ---
 
@@ -489,6 +522,7 @@ ashra/
   recall.py                 deterministic capture-history answers
   remember.py               capture CRUD + graph rebuild
   tools.py                  permission tiers + tool registry + scoped filesystem
+  integrations/             MCP client, integration config, tool registration
   mcp_server.py             optional read-only MCP filesystem server
   orchestrator.py           bounded tool loop + approval continuation
   chat.py                   answer + streaming pipeline

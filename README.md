@@ -68,6 +68,8 @@ Open a browser to http://127.0.0.1:4700/ to see the A.S.H.R.A UI.
 | `/sessions/{id}` | GET | - | Persisted conversation history for one session |
 | `/tools` | GET | `?permission=read` | Tools available at a permission level |
 | `/tools/invoke` | POST | `{ "name": "...", "arguments": {}, "permission": "read", "approved": false }` | Invoke a tool through the permission gate |
+| `/integrations` | GET | - | Connected MCP servers, their tools, and any connection errors |
+| `/integrations/{name}` | GET | - | Status for one MCP integration |
 | `/approvals` | GET | `?status=pending&limit=50` | Pending and recent approval requests |
 | `/approvals/{id}` | POST | `{ "approve": true }` | Approve or deny a pending tool call and resume the answer |
 | `/audit` | GET | `?limit=50&event=chat` | Recent audit events |
@@ -99,6 +101,46 @@ The default tool pack is `fs_list`, `fs_read`, and `fs_search`, scoped to `notes
 Chat requests carry a `permission` tier (`read` by default; the viewer sends `act`). Read tools run immediately. A state-changing tool that requires approval does not run: the orchestrator stores the pending call in `data/ashra.db`, emits `approval_required`, and returns `status: "awaiting_approval"`. Approving the call through `POST /approvals/{id}` executes it and resumes the answer with the saved conversation state.
 
 Providers that do not implement tool calling still answer normally, just without tools. The Anthropic and OpenAI-compatible providers both support tool schemas and tool results.
+
+### MCP integrations (read-only)
+
+A.S.H.R.A can attach external MCP servers and expose their tools through the same permissioned registry. Phase 1D is read-only: integrations must declare `permission: "read"`, and their tools never require approval because they cannot change state.
+
+Add an `integrations` array to `config.json`:
+
+```json
+{
+  "integrations": [
+    {
+      "name": "filesystem",
+      "transport": "stdio",
+      "command": ["python", "-m", "ashra.mcp_server", "--root", "notes"],
+      "permission": "read",
+      "timeout": 20
+    },
+    {
+      "name": "calendar",
+      "transport": "http",
+      "url": "http://127.0.0.1:8765/mcp",
+      "permission": "read"
+    }
+  ]
+}
+```
+
+- `name` becomes the tool prefix: a remote `search` tool from `gmail` is exposed as `gmail_search`.
+- `transport` is `stdio` or `http` (also accepts `streamable_http`).
+- `stdio` requires `command`; `http` requires `url`.
+- `env` and `cwd` are optional for stdio servers.
+- `timeout` is per operation, in seconds (1-120).
+
+Each server is probed once at startup. Restart the server after changing the `integrations` array. A broken server is reported by `GET /integrations` and does not block chat or the other integrations. Tool calls are audited like local tools, and the model sees remote tools through the normal bounded orchestrator loop.
+
+The MCP SDK is optional. Install it with:
+
+```bash
+python -m pip install "mcp>=1.0"
+```
 
 ### MCP filesystem server
 
@@ -134,6 +176,7 @@ Each capture contains simple frontmatter with `created` and `source`, an H1 titl
 
 - Chat with your notes: `POST /chat` builds a graph of related notes and asks the LLM.
 - Tool-calling loop: the assistant can search and read the vault on its own, then answer.
+- Read-only MCP integrations: attach mail, calendar, or other MCP servers as namespaced tools.
 - Streaming answers: `POST /chat/stream` sends sources first, then word-sized tokens.
 - Approval gate: state-changing tools pause for a click in the viewer before running.
 - Automatic graph generation: `build.py` produces `viewer/graph-data.js` from all notes.
@@ -168,6 +211,7 @@ To add a new note category:
 - `ashra/orchestrator.py` - bounded tool-calling loop and approval continuation.
 - `ashra/db.py` - SQLite sessions, messages, approvals, and audit events.
 - `ashra/tools.py` - permission tiers, tool registry, and scoped filesystem tools.
+- `ashra/integrations/` - MCP client, integration config, and tool registration.
 - `ashra/mcp_server.py` - optional read-only MCP server for the notes vault.
 - `ashra/remember.py` - captures, appends, renames, and deletes note files.
 - `ashra/config.py` - loads and validates `config.json`.

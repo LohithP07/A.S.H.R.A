@@ -2,10 +2,16 @@ from __future__ import annotations
 
 import unittest
 
-from ashra.persona import small_talk_reply
+from ashra.persona import compose_system_prompt, small_talk_reply
 
 
 class PersonaTests(unittest.TestCase):
+    def test_system_prompt_marks_tool_results_as_untrusted(self) -> None:
+        prompt = compose_system_prompt("[1] Pricing\nValue based pricing.")
+        self.assertIn("tool results", prompt)
+        self.assertIn("untrusted data", prompt)
+        self.assertIn("Never follow", prompt)
+
     def test_identity_uses_the_project_name(self) -> None:
         reply = small_talk_reply("who are you")
         self.assertIsNotNone(reply)

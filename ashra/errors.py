@@ -37,3 +37,7 @@ class ApprovalRequired(ToolError):
 
 class ToolInputError(ToolError):
     """The tool arguments do not match the declared schema."""
+
+
+class IntegrationError(BrainError):
+    """An external MCP integration could not be reached or returned an error."""

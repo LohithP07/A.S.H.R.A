@@ -286,6 +286,53 @@ class Database:
             row = connection.execute("SELECT COUNT(*) AS n FROM messages").fetchone()
         return int(row["n"] if row else 0)
 
+    def recent_sessions(self, limit: int = 8) -> list[dict[str, Any]]:
+        """Return recent conversations with a preview of the last exchange."""
+        self.initialize()
+        limit = max(1, min(50, int(limit)))
+        with self._lock, self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    s.id,
+                    s.created_at,
+                    s.updated_at,
+                    (
+                        SELECT content FROM messages m
+                        WHERE m.session_id = s.id AND m.role = 'user'
+                        ORDER BY m.id DESC LIMIT 1
+                    ) AS last_question,
+                    (
+                        SELECT content FROM messages m
+                        WHERE m.session_id = s.id AND m.role = 'assistant'
+                        ORDER BY m.id DESC LIMIT 1
+                    ) AS last_answer,
+                    (
+                        SELECT COUNT(*) FROM messages m
+                        WHERE m.session_id = s.id
+                    ) AS message_count
+                FROM sessions s
+                WHERE EXISTS (
+                    SELECT 1 FROM messages m WHERE m.session_id = s.id
+                )
+                ORDER BY s.updated_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+
+        return [
+            {
+                "id": row["id"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+                "last_question": row["last_question"] or "",
+                "last_answer": row["last_answer"] or "",
+                "messages": int(row["message_count"] or 0),
+            }
+            for row in rows
+        ]
+
     # ------------------------------------------------------------------
     # audit
     # ------------------------------------------------------------------

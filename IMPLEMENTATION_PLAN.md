@@ -418,6 +418,50 @@ not a prettier graph.
 
 ---
 
+## Phase 2C — Home hub and capture loop (complete)
+
+Home is the surface that answers "what needs me right now?" and turns a
+conversation into memory without a detour through the Brain.
+
+- [x] Move the Galaxy to `/galaxy.html`; make `/` the Home command deck.
+- [x] Add `GET /home`: one aggregate read with status, brief, Needs You
+      (proposed memories plus pending approvals), recent confirmed memories,
+      recent sessions, recent audit events, and memory stats.
+- [x] Add `viewer/index.html`, `home.css`, and `home.js` with no build step:
+      daily brief, Needs You queue with inline confirm/reject and approve/deny,
+      quick capture, recent threads, recent memories, and activity.
+- [x] Add a Ctrl+K command palette for ask, capture, Brain, Galaxy, ingest,
+      consolidate, rebuild, and refresh.
+- [x] Add `POST /memory/remember` to split text into atomic memories and confirm
+      them immediately.
+- [x] Add a conservative automatic proposal detector for durable first-person
+      statements; questions and commands are ignored.
+- [x] Handle an explicit "remember that …" inside chat on the server, without a
+      model call.
+- [x] Return `memories_proposed` on `/chat`, `/chat/stream`, and the
+      orchestrator result so the UI can confirm what was captured.
+- [x] Add **Remember this** to the Galaxy answer card, backed by
+      `/memory/remember`.
+- [x] Add `Database.recent_sessions()` for thread previews.
+- [x] Keep audit payloads in `/home` light by omitting heavy `detail` fields.
+- [x] Update Home/Galaxy/Brain navigation so the three surfaces read as one
+      product.
+
+### Phase 2C acceptance criteria
+
+- Home loads without a model key and shows the brief, inbox, and recents.
+- A quick capture can be proposed or confirmed, and the Needs You queue updates
+  in place.
+- Confirming or rejecting a proposal, and approving or denying an action, both
+  work from Home and are audited.
+- A first-person statement in chat creates a proposal; a question does not.
+- "Remember that …" confirms immediately and works without a model call.
+- **Remember this** on a long answer splits it into atomic confirmed memories.
+- `/home` stays small enough to load quickly and omits heavy audit detail.
+- Tests cover the new store methods, chat paths, and API endpoints.
+
+---
+
 ## Phase 2 — The Voice (implemented in this pass)
 
 - [x] Speak every answer with `speechSynthesis`, preferring a British English

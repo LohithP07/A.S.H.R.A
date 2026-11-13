@@ -109,6 +109,24 @@ class ToolSpec:
             "tags": list(self.tags),
         }
 
+    def provider_schema(self, style: str = "openai") -> dict[str, Any]:
+        """Render this tool for a model provider's tool-calling API."""
+        schema = self.input_schema or {"type": "object", "properties": {}}
+        if style == "anthropic":
+            return {
+                "name": self.name,
+                "description": self.description,
+                "input_schema": schema,
+            }
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": schema,
+            },
+        }
+
 
 class ToolRegistry:
     """Register tools once and invoke them through one permission gate."""
@@ -131,12 +149,16 @@ class ToolRegistry:
             raise ToolNotFound(f"Tool '{name}' is not registered.")
         return spec
 
-    def list(self, granted: Permission = Permission.READ) -> list[dict[str, Any]]:
+    def specs(self, granted: Permission = Permission.READ) -> list[ToolSpec]:
+        """Return the tool specs a caller with ``granted`` may use."""
         return [
-            spec.as_dict()
+            spec
             for spec in sorted(self._tools.values(), key=lambda item: item.name)
             if granted.allows(spec.permission)
         ]
+
+    def list(self, granted: Permission = Permission.READ) -> list[dict[str, Any]]:
+        return [spec.as_dict() for spec in self.specs(granted)]
 
     def invoke(
         self,

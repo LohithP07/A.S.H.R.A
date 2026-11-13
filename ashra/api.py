@@ -13,6 +13,8 @@ The API keeps the original viewer contract and adds the Phase 1 foundation:
     GET  /sessions/{id}   persisted conversation history
     GET  /tools           tools the caller may use
     POST /tools/invoke    invoke a tool through the permission gate
+    GET  /approvals       pending and recent approval requests
+    POST /approvals/{id}  approve or deny a pending tool call
     GET  /audit           recent audit events
     POST /rebuild         rebuild the viewer graph
 
@@ -52,6 +54,7 @@ from .errors import (
     ToolInputError,
     ToolNotFound,
 )
+from .orchestrator import Orchestrator
 from .remember import append as append_capture
 from .remember import forget as forget_capture
 from .remember import remember as remember_capture
@@ -59,7 +62,7 @@ from .remember import rename as rename_capture
 from .sessions import SESSION_RE
 from .tools import Permission, ToolRegistry, build_default_registry, parse_permission
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 MAX_BODY_BYTES = 64 * 1024
 BLOCKED_NAMES = {"config.json", ".env", ".git"}
 
@@ -72,6 +75,7 @@ logger = logging.getLogger("ashra.api")
 class ChatRequest(BaseModel):
     question: str = ""
     session_id: str | None = None
+    permission: str = "read"
 
 
 class RememberRequest(BaseModel):
@@ -101,6 +105,10 @@ class ToolInvokeRequest(BaseModel):
     arguments: dict[str, Any] = Field(default_factory=dict)
     permission: str = "read"
     approved: bool = False
+
+
+class ApprovalDecision(BaseModel):
+    approve: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -174,6 +182,7 @@ def create_app(
     chat: ChatService | None = None,
     database: Database | None = None,
     registry: ToolRegistry | None = None,
+    orchestrator: Orchestrator | None = None,
     viewer_dir: Path | None = None,
 ) -> FastAPI:
     base = Path(base_dir or Path(__file__).resolve().parent.parent)
@@ -182,6 +191,9 @@ def create_app(
     sessions = SQLiteSessionStore(db)
     service = chat or ChatService(base, sessions=sessions)
     tools = registry or build_default_registry(base, audit=_tool_audit(db))
+    agent = orchestrator
+    if agent is None and isinstance(service, ChatService):
+        agent = Orchestrator(service, tools, db)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -201,6 +213,7 @@ def create_app(
     app.state.database = db
     app.state.chat = service
     app.state.tools = tools
+    app.state.orchestrator = agent
 
     # ------------------------------------------------------------------
     # middleware
@@ -317,6 +330,7 @@ def create_app(
             "notes": note_count,
             "sessions": db.count_sessions(),
             "messages": db.count_messages(),
+            "approvals": db.count_approvals(),
             "tools": len(tools.list(Permission.ADMIN)),
             "database": str(db.path),
             "viewer": str(viewer),
@@ -328,16 +342,35 @@ def create_app(
     @app.post("/chat")
     def chat_endpoint(request_body: ChatRequest, request: Request) -> dict[str, Any]:
         request_id = _request_id(request)
+        granted = parse_permission(request_body.permission)
         try:
-            result = service.ask(
-                request_body.question,
-                session_id=request_body.session_id,
-            )
+            if agent is not None:
+                result = agent.ask(
+                    request_body.question,
+                    session_id=request_body.session_id,
+                    granted=granted,
+                    request_id=request_id,
+                )
+                payload = result.as_dict()
+            else:
+                plain = service.ask(
+                    request_body.question,
+                    session_id=request_body.session_id,
+                )
+                payload = {
+                    "status": "ok",
+                    "answer": plain.answer,
+                    "nodes": plain.nodes,
+                    "sources": plain.sources,
+                    "session_id": plain.session_id,
+                    "model": plain.model,
+                }
         except Exception as exc:
             db.record_audit(
                 "chat",
                 "ask",
                 status="error",
+                permission=granted.value,
                 request_id=request_id,
                 session_id=request_body.session_id,
                 detail={
@@ -350,35 +383,40 @@ def create_app(
         db.record_audit(
             "chat",
             "ask",
-            status="ok",
+            status=str(payload.get("status") or "ok"),
+            permission=granted.value,
             request_id=request_id,
-            session_id=result.session_id,
+            session_id=payload.get("session_id"),
             detail={
-                "nodes": result.nodes,
-                "model": result.model,
-                "chars": len(result.answer),
+                "nodes": payload.get("nodes", []),
+                "model": payload.get("model"),
+                "chars": len(str(payload.get("answer") or "")),
+                "tools": [item.get("name") for item in payload.get("tools", [])],
             },
         )
-        return {
-            "answer": result.answer,
-            "nodes": result.nodes,
-            "sources": result.sources,
-            "session_id": result.session_id,
-            "model": result.model,
-        }
+        return payload
 
     @app.post("/chat/stream")
     async def chat_stream(request_body: ChatRequest, request: Request):
         request_id = _request_id(request)
+        granted = parse_permission(request_body.permission)
 
         async def events():
             status = "ok"
             detail: dict[str, Any] = {}
             session_id = request_body.session_id
-            stream = service.stream(
-                request_body.question,
-                session_id=request_body.session_id,
-            )
+            if agent is not None:
+                stream = agent.stream(
+                    request_body.question,
+                    session_id=request_body.session_id,
+                    granted=granted,
+                    request_id=request_id,
+                )
+            else:
+                stream = service.stream(
+                    request_body.question,
+                    session_id=request_body.session_id,
+                )
             try:
                 async for event in iterate_in_threadpool(stream):
                     if await request.is_disconnected():
@@ -386,10 +424,16 @@ def create_app(
                     if event.get("event") in {"start", "done"} and event.get("session_id"):
                         session_id = str(event["session_id"])
                     if event.get("event") == "done":
+                        status = str(event.get("status") or "ok")
                         detail = {
                             "nodes": event.get("nodes", []),
                             "model": event.get("model"),
                             "chars": len(str(event.get("answer", ""))),
+                            "tools": [
+                                item.get("name")
+                                for item in event.get("tools", [])
+                                if isinstance(item, dict)
+                            ],
                         }
                     yield _sse(event)
             except Exception as exc:
@@ -416,6 +460,7 @@ def create_app(
                     "chat",
                     "stream",
                     status=status,
+                    permission=granted.value,
                     request_id=request_id,
                     session_id=session_id,
                     detail=detail,
@@ -564,6 +609,35 @@ def create_app(
             "permission": granted.value,
             "result": result,
         }
+
+    @app.get("/approvals")
+    def list_approvals(status: str | None = None, limit: int = 50) -> dict[str, Any]:
+        return {"approvals": db.list_approvals(status=status, limit=limit)}
+
+    @app.get("/approvals/{approval_id}")
+    def get_approval(approval_id: str) -> Any:
+        row = db.get_approval(approval_id)
+        if row is None:
+            return _error(404, "not_found", "No such approval.")
+        return {"approval": row}
+
+    @app.post("/approvals/{approval_id}")
+    def decide_approval(
+        approval_id: str,
+        request_body: ApprovalDecision,
+        request: Request,
+    ) -> Any:
+        if agent is None:
+            return _error(503, "not_available", "The orchestrator is not available.")
+        try:
+            result = agent.resume_result(
+                approval_id,
+                approve=request_body.approve,
+                request_id=_request_id(request),
+            )
+        except ValueError as exc:
+            return _error(400, "bad_request", str(exc))
+        return result.as_dict()
 
     @app.get("/audit")
     def audit_log(limit: int = 50, event: str | None = None) -> dict[str, Any]:

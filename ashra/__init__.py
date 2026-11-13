@@ -2,16 +2,17 @@
 
 The package is intentionally kept separate from the viewer and from any one
 model provider.  That keeps the notes, retrieval, conversation memory, tool
-registry, and model transport independently replaceable.
+registry, orchestrator, and model transport independently replaceable.
 """
 
 from .chat import ChatResult, ChatService
 from .config import AppConfig, load_config
 from .db import Database, SQLiteSessionStore
 from .errors import BrainError, ConfigError, NotConfiguredError, ProviderError
+from .orchestrator import Orchestrator, OrchestratorResult
 from .tools import Permission, ToolRegistry, build_default_registry
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "AppConfig",
@@ -21,6 +22,8 @@ __all__ = [
     "ConfigError",
     "Database",
     "NotConfiguredError",
+    "Orchestrator",
+    "OrchestratorResult",
     "Permission",
     "ProviderError",
     "SQLiteSessionStore",

@@ -1,8 +1,10 @@
 # A.S.H.R.A
 
-A.S.H.R.A is a local-first, note-grounded personal assistant. It exposes a simple UI in `viewer/`, lets you store and query Markdown notes, and answers questions by searching those notes with an LLM.
+A.S.H.R.A is a local-first personal assistant with a memory of its own. It answers from your Markdown notes and from typed, provenance-carrying memories, shows you its brain, and asks before it acts.
 
-Designed for personal or small-team use - no public endpoints, no external storage, only your machine. The included `notes/` vault is a sample coffee-business knowledge base; replace it with your own.
+Two surfaces ship today: the **Galaxy** (`/`) maps your notes as a 3D knowledge graph, and the **Brain** (`/brain.html`) lets you inspect, correct, and curate what the assistant remembers.
+
+Designed for personal or small-team use - no public endpoints, no external storage, only your machine. The included `notes/` vault is a sample coffee-business knowledge base; replace it with your own. Deleting the vault no longer erases everything the assistant knows: conversation and capture memory live in local SQLite.
 
 ## Installation
 
@@ -51,14 +53,14 @@ python build.py
 python server.py
 ```
 
-Open a browser to http://127.0.0.1:4700/ to see the A.S.H.R.A UI.
+Open a browser to http://127.0.0.1:4700/ for the Galaxy, or http://127.0.0.1:4700/brain.html for the Brain. Memory works without a provider key; chat needs one.
 
 ### API
 
 | Endpoint | Method | Payload | Notes |
 |----------|--------|---------|-------|
 | `/health` | GET | - | Liveness, version, and server time |
-| `/status` | GET | - | Provider, vault, session, tool, agent, and integration summary |
+| `/status` | GET | - | Provider, vault, memory, session, tool, agent, and integration summary |
 | `/chat` | POST | `{ "question": "...", "session_id": "optional", "permission": "read" }` | Runs the tool loop; returns answer, sources, note ids, and any pending approval |
 | `/chat/stream` | POST | same as `/chat` | Server-sent events (`start`, `sources`, `tool_call`, `tool_result`, `approval_required`, `token`, `done`, `error`) |
 | `/remember` | POST | `{ "text": "...", "source": "typed" }` | Create a new capture |
@@ -75,13 +77,49 @@ Open a browser to http://127.0.0.1:4700/ to see the A.S.H.R.A UI.
 | `/approvals` | GET | `?status=pending&limit=50` | Pending and recent approval requests |
 | `/approvals/{id}` | POST | `{ "approve": true }` | Approve or deny a pending tool call and resume the answer |
 | `/audit` | GET | `?limit=50&event=chat` | Recent audit events |
+| `/memory` | GET | `?status=&kind=&limit=` | Memories plus global lifecycle stats |
+| `/memory` | POST | `{ "content": "...", "kind": "fact", "status": "proposed" }` | Create one memory |
+| `/memory/stats` | GET | - | Lifecycle counts and health signals |
+| `/memory/proposals` | GET | `?limit=100` | Proposed memories awaiting review |
+| `/memory/search` | GET | `?q=...&status=confirmed&kind=` | Scored lexical search |
+| `/memory/graph` | GET | `?status=&limit=500` | Memory nodes and shared-entity links |
+| `/memory/timeline` | GET | `?status=&limit=120` | Memories in chronological order |
+| `/memory/propose` | POST | `{ "text": "..." }` | Split text into atomic proposals |
+| `/memory/ingest` | POST | - | Import notes as `document` memories |
+| `/memory/consolidate` | POST | - | Merge duplicates and decay stale records |
+| `/memory/{id}` | GET | - | One memory plus related memories |
+| `/memory/{id}/confirm` | POST | - | Confirm a proposal |
+| `/memory/{id}/reject` | POST | - | Reject a proposal |
+| `/memory/{id}` | PATCH | `{ "content": ..., "pinned": true }` | Edit or pin a memory |
+| `/memory/{id}/forget` | POST | `{ "confirm": true }` | Permanently delete a memory |
 | `/rebuild` | POST | - | Rebuild `viewer/graph-data.js` from the notes vault |
 
 All responses are JSON except `/chat/stream`, which uses `text/event-stream`. The server only serves files inside `viewer/`; requests for `config.json`, `.env`, or `.git` are blocked. Every response includes an `X-Request-ID` header.
 
 ### Persistence and audit
 
-Conversations and audit events live in `data/ashra.db` (SQLite, git-ignored). The database stores sessions, messages, and audit events for chat, vault, and tool actions. The in-memory `SessionStore` remains available for tests and scripts; the API injects the SQLite-backed store.
+Conversations, memory, approvals, and audit events live in `data/ashra.db` (SQLite, git-ignored). The database stores sessions, messages, typed memories, memory links and events, and audit records for chat, vault, memory, and tool actions. The in-memory `SessionStore` remains available for tests and scripts; the API injects the SQLite-backed store.
+
+### Memory
+
+Memory is not a transcript and not a folder of notes. It is a set of small, typed claims with provenance and a lifecycle:
+
+```text
+proposed -> confirmed -> archived
+         \-> rejected
+```
+
+Kinds are `fact`, `preference`, `person`, `project`, `event`, `task`, `document`, `procedure`, and `observation`. Every record carries its source, confidence, sensitivity, reinforcement count, entities, and timestamps.
+
+- **Propose and confirm.** By default A.S.H.R.A proposes memories and waits for approval in the Brain's proposals inbox. An explicit "remember that …" capture is confirmed immediately.
+- **Retrieval.** Search scores lexical overlap together with confidence, reinforcement, recency, and pinning. FTS5 is used when the local SQLite build supports it; otherwise the store falls back to a scored scan.
+- **Evidence.** Chat sources include memory records alongside notes, so an answer can show what it remembered and where that came from.
+- **Lifecycle.** Confirm, reject, edit, pin, archive, consolidate, and forget are first-class operations. Forgetting is permanent and requires confirmation.
+- **Health.** The Brain reports stale, orphaned, low-confidence, and duplicate records.
+- **Secrets are refused.** Credential-shaped text never enters memory.
+- **Notes are a connector.** Ingesting the vault creates `document` memories with a stable `notes/...` reference. Deleting the vault leaves conversation and capture memory intact.
+
+The **Brain** at `/brain.html` exposes three synchronized views over the same data: a force-directed **Graph** of shared entities, a **Timeline** of when memories arrived, and a **Library** with search, filters, provenance, and lifecycle actions.
 
 ### Tools and permissions
 
@@ -94,7 +132,7 @@ Tools declare a permission tier and whether they need approval:
 | `act` | Change local state |
 | `admin` | Destructive or configuration-level work |
 
-The default tool pack is `fs_list`, `fs_read`, and `fs_search`, scoped to `notes/`, plus `spawn_agent` for delegation. `vault_remember` and `vault_append` require `act` permission plus `approved: true`. Paths cannot escape the vault, and blocked names such as `config.json`, `.env`, and `.git` are never exposed.
+The default tool pack is `fs_list`, `fs_read`, and `fs_search`, scoped to `notes/`, plus `spawn_agent` for delegation. `vault_remember` and `vault_append` require `act` permission plus `approved: true`. The memory pack adds `memory_search` (`read`), `memory_propose` (`draft`), `memory_remember` (`act` plus approval), and `memory_forget` (`admin` plus approval). Paths cannot escape the vault, and blocked names such as `config.json`, `.env`, and `.git` are never exposed.
 
 ### Tool-calling orchestrator
 
@@ -194,8 +232,11 @@ Each capture contains simple frontmatter with `created` and `source`, an H1 titl
 
 ## Features
 
-- Chat with your notes: `POST /chat` builds a graph of related notes and asks the LLM.
-- Tool-calling loop: the assistant can search and read the vault on its own, then answer.
+- Chat with your notes and memory: `POST /chat` retrieves both, then asks the LLM.
+- Typed long-term memory with a propose/confirm lifecycle, provenance, and hybrid-ready retrieval.
+- The Brain: graph, timeline, and library views with a proposals inbox and confirm/reject/pin/edit/forget actions.
+- Note ingestion into memory, so the vault is a source rather than the substrate.
+- Tool-calling loop: the assistant can search and read the vault and memory on its own, then answer.
 - Scoped subagents: delegate to `researcher`, `writer`, or `operator` with permission ceilings and tool allowlists.
 - Read-only MCP integrations: attach mail, calendar, or other MCP servers as namespaced tools.
 - Streaming answers: `POST /chat/stream` sends sources first, then word-sized tokens.
@@ -230,14 +271,15 @@ To add a new note category:
 - `ashra/api.py` - FastAPI routes, SSE streaming, request IDs, and error mapping.
 - `ashra/chat.py` - `ChatService.ask()` and `ChatService.stream()` share retrieval and provider logic.
 - `ashra/orchestrator.py` - bounded tool-calling loop and approval continuation.
-- `ashra/db.py` - SQLite sessions, messages, approvals, and audit events.
-- `ashra/tools.py` - permission tiers, tool registry, and scoped filesystem tools.
+- `ashra/db.py` - SQLite sessions, messages, memories, approvals, and audit events.
+- `ashra/memory.py` - typed memory store, lifecycle, retrieval, graph, ingestion, and health.
+- `ashra/tools.py` - permission tiers, tool registry, scoped filesystem tools, and the memory tool pack.
 - `ashra/agents/` - specialist registry, permission ceiling, bounded child runner, and `spawn_agent`.
 - `ashra/integrations/` - MCP client, integration config, and tool registration.
 - `ashra/mcp_server.py` - optional read-only MCP server for the notes vault.
 - `ashra/remember.py` - captures, appends, renames, and deletes note files.
 - `ashra/config.py` - loads and validates `config.json`.
-- `viewer/` - static front-end assets.
+- `viewer/` - static front-end assets: Galaxy (`index.html`, `app.js`) and Brain (`brain.html`, `brain.js`).
 
 ## Contributing
 

@@ -30,6 +30,7 @@ from .errors import (
     ToolInputError,
     ToolNotFound,
 )
+from .memory import KINDS, MemoryStore
 from .remember import append as append_capture
 from .remember import remember as remember_capture
 
@@ -568,11 +569,61 @@ def _vault_append(base_dir: Path) -> Callable[[dict[str, Any]], Any]:
     return handler
 
 
+def _memory_search(memory: MemoryStore) -> Callable[[dict[str, Any]], Any]:
+    def handler(args: dict[str, Any]) -> Any:
+        results = memory.search(
+            str(args.get("query", "")),
+            limit=int(args.get("limit", 8)),
+            kind=str(args["kind"]) if args.get("kind") else None,
+        )
+        return {"query": args.get("query", ""), "memories": results}
+
+    return handler
+
+
+def _memory_propose(memory: MemoryStore) -> Callable[[dict[str, Any]], Any]:
+    def handler(args: dict[str, Any]) -> Any:
+        proposal = memory.propose(
+            str(args.get("content", "")),
+            kind=str(args["kind"]) if args.get("kind") else None,
+            source=str(args.get("source", "assistant")),
+        )
+        return {"memory": proposal, "status": "proposed"}
+
+    return handler
+
+
+def _memory_remember(memory: MemoryStore) -> Callable[[dict[str, Any]], Any]:
+    def handler(args: dict[str, Any]) -> Any:
+        remembered = memory.remember(
+            str(args.get("content", "")),
+            kind=str(args["kind"]) if args.get("kind") else None,
+            source=str(args.get("source", "assistant")),
+        )
+        return {"memory": remembered, "status": "confirmed"}
+
+    return handler
+
+
+def _memory_forget(memory: MemoryStore) -> Callable[[dict[str, Any]], Any]:
+    def handler(args: dict[str, Any]) -> Any:
+        memory_id = str(args.get("memory_id", "")).strip()
+        if not memory_id:
+            raise ToolInputError("Name the memory to forget.")
+        removed = memory.forget(memory_id)
+        if not removed:
+            raise ToolInputError("That memory does not exist.")
+        return {"forgotten": memory_id}
+
+    return handler
+
+
 def build_default_registry(
     base_dir: Path,
     *,
     fs_root: Path | None = None,
     audit: Callable[[dict[str, Any]], None] | None = None,
+    memory: MemoryStore | None = None,
 ) -> ToolRegistry:
     """The local-first tool pack: scoped reads plus approval-gated writes."""
     base_dir = Path(base_dir)
@@ -697,4 +748,93 @@ def build_default_registry(
             tags=("vault", "write"),
         )
     )
+
+    if memory is not None:
+        registry.register(
+            ToolSpec(
+                name="memory_search",
+                description="Search confirmed long-term memory for relevant facts.",
+                permission=Permission.READ,
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "minLength": 2},
+                        "kind": {"type": "string", "enum": list(KINDS)},
+                        "limit": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 50,
+                            "default": 8,
+                        },
+                    },
+                    "required": ["query"],
+                    "additionalProperties": False,
+                },
+                handler=_memory_search(memory),
+                tags=("memory", "search"),
+            )
+        )
+        registry.register(
+            ToolSpec(
+                name="memory_propose",
+                description=(
+                    "Propose a memory for the user to confirm. Proposals never "
+                    "become confirmed memory until the user approves them."
+                ),
+                permission=Permission.DRAFT,
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "content": {"type": "string", "minLength": 3, "maxLength": 2000},
+                        "kind": {"type": "string", "enum": list(KINDS)},
+                        "source": {"type": "string", "default": "assistant"},
+                    },
+                    "required": ["content"],
+                    "additionalProperties": False,
+                },
+                handler=_memory_propose(memory),
+                tags=("memory", "proposal"),
+            )
+        )
+        registry.register(
+            ToolSpec(
+                name="memory_remember",
+                description=(
+                    "Store a confirmed long-term memory. Requires explicit approval."
+                ),
+                permission=Permission.ACT,
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "content": {"type": "string", "minLength": 3, "maxLength": 2000},
+                        "kind": {"type": "string", "enum": list(KINDS)},
+                        "source": {"type": "string", "default": "assistant"},
+                    },
+                    "required": ["content"],
+                    "additionalProperties": False,
+                },
+                handler=_memory_remember(memory),
+                requires_approval=True,
+                tags=("memory", "write"),
+            )
+        )
+        registry.register(
+            ToolSpec(
+                name="memory_forget",
+                description="Permanently delete one memory. Requires approval.",
+                permission=Permission.ADMIN,
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "memory_id": {"type": "string", "minLength": 1},
+                    },
+                    "required": ["memory_id"],
+                    "additionalProperties": False,
+                },
+                handler=_memory_forget(memory),
+                requires_approval=True,
+                tags=("memory", "delete"),
+            )
+        )
+
     return registry

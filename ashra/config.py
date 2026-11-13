@@ -24,6 +24,7 @@ class AppConfig:
     model: str = DEFAULT_MODEL
     provider: str = "anthropic"
     max_notes: int = 6
+    max_memories: int = 6
     max_history: int = 8
     max_tokens: int = 512
     temperature: float = 0.2
@@ -97,6 +98,7 @@ def load_config(path: Path) -> AppConfig:
         model=_text(raw, "model", DEFAULT_MODEL),
         provider=provider,
         max_notes=_bounded_int(raw, "max_notes", 6, 1, 12),
+        max_memories=_bounded_int(raw, "max_memories", 6, 0, 20),
         max_history=_bounded_int(raw, "max_history", 8, 2, 40),
         max_tokens=_bounded_int(raw, "max_tokens", 512, 64, 4096),
         temperature=_bounded_float(raw, "temperature", 0.2, 0.0, 1.0),

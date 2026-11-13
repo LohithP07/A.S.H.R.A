@@ -104,7 +104,7 @@ class ChatServiceTests(unittest.TestCase):
         note = make_note(1, "Pricing Strategy", "Our pricing strategy is value based.")
         result = self.service([note]).ask("quantum entanglement")
 
-        self.assertEqual(result.answer, "I don't have a note that covers that.")
+        self.assertEqual(result.answer, "I don't have a note or memory that covers that.")
         self.assertEqual(result.nodes, [])
         self.assertEqual(self.provider.calls, 0)
 
@@ -141,7 +141,7 @@ class ChatServiceTests(unittest.TestCase):
         events = list(self.service([note]).stream("quantum entanglement"))
 
         self.assertEqual(events[-1]["event"], "done")
-        self.assertEqual(events[-1]["answer"], "I don't have a note that covers that.")
+        self.assertEqual(events[-1]["answer"], "I don't have a note or memory that covers that.")
         self.assertEqual(self.provider.calls, 0)
 
     def test_stream_requires_a_key_for_a_real_question(self) -> None:

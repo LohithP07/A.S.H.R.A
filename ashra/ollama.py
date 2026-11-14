@@ -120,8 +120,10 @@ class OllamaProvider:
             "stream": False,
             # Thinking mode is on by default in Qwen 3.5.  Left enabled it
             # spends the whole token budget reasoning and returns nothing, so
-            # the adapter always states the intent explicitly.
-            "think": False,
+            # the adapter always states the intent explicitly.  The config
+            # option exists for a model where reasoning genuinely helps; the
+            # default stays off.
+            "think": bool(self.config.local_think),
             "options": self._options(),
         }
         want_json = self.config.local_format == "json" if structured is None else structured

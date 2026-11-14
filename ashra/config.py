@@ -143,6 +143,10 @@ class AppConfig:
             model=model,
             api_base=api_base,
             api_key=key,
+            # The reference has been consumed.  Keeping it on the snapshot
+            # would make ``configured`` claim a key that is not there.
+            credential_ref="",
+            cloud_credential_ref="",
         )
 
 

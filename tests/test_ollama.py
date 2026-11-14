@@ -82,6 +82,14 @@ class ChatPayloadTests(unittest.TestCase):
         _path, payload, _timeout = provider.calls[0]
         self.assertEqual(payload["format"], "json")
 
+    def test_thinking_can_be_enabled_by_configuration(self) -> None:
+        provider = StubProvider(
+            local_config(local_think=True),
+            {"message": {"content": "hello"}},
+        )
+        provider.complete("sys", [{"role": "user", "content": "hi"}])
+        self.assertTrue(provider.calls[0][1]["think"])
+
     def test_config_can_default_to_json(self) -> None:
         provider = StubProvider(
             local_config(local_format="json"),

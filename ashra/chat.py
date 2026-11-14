@@ -213,6 +213,11 @@ class ChatService:
             )
 
         if not config.configured:
+            if config.provider in {"ollama", "local"}:
+                raise NotConfiguredError(
+                    "The local lane isn't configured. Set local.model in "
+                    "config.json, start Ollama, then reload."
+                )
             raise NotConfiguredError(
                 "A.S.H.R.A is not configured. Paste your provider API key into "
                 "config.json, set the model, then reload."
@@ -248,6 +253,7 @@ class ChatService:
             question,
             matches,
             memories,
+            history,
         )
 
         return _Prepared(
@@ -269,15 +275,19 @@ class ChatService:
         question: str,
         matches: list[ScoredNote] = (),
         memories: tuple[dict[str, Any], ...] = (),
+        history: list[dict[str, str]] = (),
     ) -> str:
         """The most private class present in anything the model would read.
 
-        A model sees the question, the retrieved note bodies, and the recalled
-        memories.  The class of the request is the highest of those, never the
-        lowest — an email address in a retrieved note makes the whole call
-        private.
+        A model sees the question, the prior turns, the retrieved note bodies,
+        and the recalled memories.  The class of the request is the highest of
+        those, never the lowest — an email address in a retrieved note, or in a
+        turn two messages back, makes the whole call private.  History matters
+        most: it is resent on every turn, so a private turn must keep the
+        session on the local lane until it scrolls out.
         """
         parts = [question]
+        parts.extend(str(message.get("content") or "") for message in history)
         parts.extend(item.note.text for item in matches)
         parts.extend(str(memory.get("content") or "") for memory in memories)
         return sensitivity.classify("\n".join(parts))
@@ -289,9 +299,11 @@ class ChatService:
             default_lane=prepared.config.privacy_default_lane,
         )
         route = router.decide(task, prepared.sensitivity)
-        if route.lane == LANE_CLOUD and not prepared.config.cloud_configured:
+        if route.lane == LANE_CLOUD and not self.cloud_ready(prepared.config):
             # An unconfigured cloud lane is not a lane.  Staying local keeps the
-            # audit honest and avoids a failed request on every turn.
+            # audit honest and avoids a failed request on every turn.  A
+            # declared reference whose vault entry is missing counts as
+            # unconfigured, because there is no key to send.
             return Route(
                 lane=LANE_LOCAL,
                 task=route.task,
@@ -300,6 +312,12 @@ class ChatService:
                 fallback=None,
             )
         return route
+
+    def cloud_ready(self, config: AppConfig) -> bool:
+        """True when the cloud lane has a provider, a model, and a usable key."""
+        if not config.cloud_configured:
+            return False
+        return config.for_cloud(self.vault).configured
 
     def _record(
         self,

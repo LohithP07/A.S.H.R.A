@@ -139,6 +139,11 @@ class LaneConfigTests(unittest.TestCase):
 
         cloud = config.for_cloud(MemoryVault())
         self.assertFalse(cloud.api_key.strip())
+        # The snapshot consumed the reference, so it cannot claim a key it
+        # does not have.
+        self.assertEqual(cloud.credential_ref, "")
+        self.assertEqual(cloud.cloud_credential_ref, "")
+        self.assertFalse(cloud.configured)
 
     def test_defaults_keep_private_content_local(self) -> None:
         self.write({"provider": "ollama", "model": "local-model"})

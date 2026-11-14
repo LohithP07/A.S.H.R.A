@@ -311,7 +311,12 @@ def main(argv: list[str] | None = None) -> int:
         print("This vault is not persistent; values will disappear with the process.")
         return 2
 
-    reference = validate_ref(args.ref)
+    reference = args.ref
+    try:
+        reference = validate_ref(reference)
+    except ValueError as exc:
+        print(str(exc))
+        return 2
     if args.action == "check":
         print("present" if vault.get(reference) else "missing")
         return 0

@@ -56,6 +56,7 @@ class OrchestratorResult:
     tools: tuple[dict[str, Any], ...] = ()
     pending: dict[str, Any] | None = None
     status: str = "ok"
+    lane: str = ""
     proposal_ids: tuple[str, ...] = ()
 
     def as_dict(self) -> dict[str, Any]:
@@ -69,6 +70,8 @@ class OrchestratorResult:
             "steps": self.steps,
             "tools": list(self.tools),
         }
+        if self.lane:
+            payload["lane"] = self.lane
         if self.pending is not None:
             payload["pending_approval"] = self.pending
         if self.proposal_ids:
@@ -750,6 +753,7 @@ class Orchestrator:
             "sources": state["sources"],
             "session_id": state["session_id"],
             "model": state["model"],
+            "lane": state.get("lane", ""),
             "steps": state["step"],
             "tools": list(state["tool_log"]),
             "memories_proposed": [
@@ -775,6 +779,7 @@ class Orchestrator:
             tools=tuple(done.get("tools") or ()),
             pending=done.get("pending_approval"),
             status=str(done.get("status") or "ok"),
+            lane=str(done.get("lane") or ""),
             proposal_ids=tuple(done.get("memories_proposed") or ()),
         )
 

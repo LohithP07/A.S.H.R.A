@@ -142,6 +142,28 @@ class LaneIntegrationTests(unittest.TestCase):
         self.assertEqual(factory.keys, ["cloud-secret"])
         self.assertEqual(factory.models, ["cloud-model"])
 
+    def test_a_private_turn_keeps_the_rest_of_the_session_local(self) -> None:
+        # History is resent to the model on every turn.  Once a private turn is
+        # in it, a later public question must not be promoted to the cloud.
+        factory = RecordingFactory()
+        note = make_note("Our pricing strategy is value based.")
+        service = self.service([note], factory)
+
+        service.ask(
+            "Email sarah@example.com about the pricing strategy",
+            session_id="s-history",
+        )
+        self.assertEqual(factory.calls, ["ollama"])
+
+        factory.calls.clear()
+        result = service.ask(
+            "What is our pricing strategy?",
+            session_id="s-history",
+        )
+        self.assertEqual(factory.calls, ["ollama"])
+        self.assertEqual(result.lane, "local")
+        self.assertEqual(result.sensitivity, "private")
+
     def test_secret_content_is_refused_before_any_provider(self) -> None:
         factory = RecordingFactory()
         note = make_note("Our pricing strategy is value based. password: hunter2")
@@ -216,6 +238,22 @@ class LaneIntegrationTests(unittest.TestCase):
         self.assertEqual(result.lane, "local")
         self.assertIn("not configured", result.route["reason"])
 
+    def test_declared_reference_without_a_stored_key_stays_local(self) -> None:
+        # The cloud block names a vault entry, but the vault is empty.  There is
+        # no key to send, so the lane must not be attempted at all.
+        factory = RecordingFactory()
+        note = make_note("Our pricing strategy is value based.")
+        service = ChatService(
+            self.base,
+            notes_loader=lambda: [note],
+            provider_factory=factory,
+            vault=MemoryVault(),
+        )
+        result = service.ask("What is our pricing strategy?")
+
+        self.assertEqual(factory.calls, ["ollama"])
+        self.assertEqual(result.lane, "local")
+
     def test_stream_done_event_reports_the_lane(self) -> None:
         factory = RecordingFactory()
         note = make_note("Our pricing strategy is value based. Ask sarah@example.com.")
@@ -273,6 +311,8 @@ class OrchestratorLaneTests(unittest.TestCase):
         self.assertEqual(factory.calls, ["ollama"])
         self.assertEqual(result.model, "qwen3.5:2b-q4_K_M")
         self.assertEqual(result.status, "ok")
+        self.assertEqual(result.lane, "local")
+        self.assertEqual(result.as_dict()["lane"], "local")
 
     def test_secret_content_never_reaches_the_tool_loop(self) -> None:
         factory = RecordingFactory()

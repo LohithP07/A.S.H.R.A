@@ -191,7 +191,7 @@
     <div><span>Status</span><span>For review and approval</span></div>
     <div><span>Classification</span><span>Local / private</span></div>
     <div><span>Platform</span><span>Windows 11, single user</span></div>
-    <div><span>Baseline</span><span>v0.8.0 · commit 058c777 · 218 tests</span></div>
+    <div><span>Baseline</span><span>v0.8.0 · commit 42b491d · 266 tests</span></div>
   </div>
 
   <h3>Purpose of this document</h3>
@@ -305,7 +305,7 @@
   <p>Sending to new recipients, deleting mail, changing calendars, payments, purchases, health actions, smart-home control, arbitrary shell, and any reading of personal chat accounts are out of scope. So is multi-user support, macOS, Linux, and mobile native apps. The architecture leaves room for them; the release does not pretend to include them.</p>
 
   <h3>Delivery shape</h3>
-  <p>Work proceeds in small, reviewable phases on named branches, each squash-merged after review. The connector foundation is complete; the immediate next step is the local model router, so that privacy rules are enforced before any real email is processed.</p>
+  <p>Work proceeds in small, reviewable phases on named branches, each squash-merged after review. The connector foundation and the local model router are complete, so privacy rules are already enforced; the immediate next step is reading real email through them.</p>
 </div>
 
 <!-- ================= 2. PRODUCT DEFINITION ================= -->
@@ -1400,7 +1400,7 @@ WHERE e.to_id = ? AND e.type = 'promised_to' AND m.superseded_by IS NULL;</code>
   <table>
     <thead><tr><th class="tight">Milestone</th><th>Phases</th><th>Outcome</th><th class="tight">Depends on</th></tr></thead>
     <tbody>
-      <tr><td class="tight"><strong>M1</strong><br>Privacy + data</td><td>2E.0 connector foundation (complete)<br>2M local model and router<br>2E.1 email read<br>2E.2 calendar read</td><td>Real mail and calendar data, ingested and processed entirely locally, with a visible privacy lane.</td><td class="tight">058c777</td></tr>
+      <tr><td class="tight"><strong>M1</strong><br>Privacy + data</td><td>2E.0 connector foundation (complete)<br>2M local model and router (complete)<br>2E.1 email read<br>2E.2 calendar read</td><td>Real mail and calendar data, ingested and processed entirely locally, with a visible privacy lane.</td><td class="tight">058c777</td></tr>
       <tr><td class="tight"><strong>M2</strong><br>Control + contact</td><td>2F.0 approval hardening<br>2D Desk<br>2J Telegram channel</td><td>Runs, approvals, audit, and phone control. The owner can see and steer the system.</td><td class="tight">M1</td></tr>
       <tr><td class="tight"><strong>M3</strong><br>Draft + act</td><td>2F outbox<br>2G actions and grants</td><td>Drafts, approved sends, and scoped automation with a clean audit trail.</td><td class="tight">M2</td></tr>
       <tr><td class="tight"><strong>M4</strong><br>Proactive + tasks</td><td>2H briefs and scheduler<br>2K task ledger and follow-ups</td><td>Morning brief, reminders, waiting-on tracking, and a daily plan that reflects reality.</td><td class="tight">M3</td></tr>
@@ -1714,7 +1714,7 @@ WHERE e.to_id = ? AND e.type = 'promised_to' AND m.superseded_by IS NULL;</code>
 <div class="section">
   <div class="brandline" style="margin-bottom:18px"><span>Appendix C</span><span>Phase history</span></div>
   <h2 id="appC"><span class="n">C</span>Phase history</h2>
-  <p class="kicker">What already exists at the time of this draft. The baseline is v0.8.0 at commit <code>058c777</code>, with 218 tests passing.</p>
+  <p class="kicker">What already exists at the time of this draft. The baseline is v0.8.0 at commit <code>42b491d</code>, with 266 tests passing.</p>
 
   <table>
     <thead><tr><th class="tight">Phase</th><th>Scope</th><th class="tight">State</th></tr></thead>
@@ -1731,12 +1731,13 @@ WHERE e.to_id = ? AND e.type = 'promised_to' AND m.superseded_by IS NULL;</code>
       <tr><td class="tight">2C.1</td><td>Galaxy load performance: local vendor assets, caching.</td><td class="tight">Complete</td></tr>
       <tr><td class="tight">2E.0</td><td>Connector foundation: capability contract, registry, health, fixtures, replay.</td><td class="tight">Complete</td></tr>
       <tr><td class="tight">2UI</td><td>Aurora Rail: shared chrome, Home/Brain/Galaxy redesign, searchable Galaxy, deep links.</td><td class="tight">Complete</td></tr>
-      <tr><td class="tight">2M</td><td>Local model and privacy router.</td><td class="tight">Next</td></tr>
+      <tr><td class="tight">2M</td><td>Local model and privacy router: Ollama adapter, lane table, refusal path, lane audit, vault-backed cloud key.</td><td class="tight">Complete</td></tr>
+      <tr><td class="tight">2E.1</td><td>Email read: IMAP sync, thread reconstruction, local classification, proposal queue.</td><td class="tight">Next</td></tr>
     </tbody>
   </table>
 
   <h3>C.1 What this means for the reader</h3>
-  <p>The foundation is not a prototype. Sessions, approvals, audit, memory, agents, and the Home hub already exist and are tested. The work ahead is mostly connective: real data, a privacy router, a control channel, and the task ledger that turns observation into action.</p>
+  <p>The foundation is not a prototype. Sessions, approvals, audit, memory, agents, the Home hub, and the privacy router already exist and are tested. The work ahead is mostly connective: real data, a control channel, and the task ledger that turns observation into action.</p>
 
   <h3>C.2 Immediate next steps</h3>
   <ol>

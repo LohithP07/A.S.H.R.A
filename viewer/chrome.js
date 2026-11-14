@@ -60,7 +60,7 @@
 
     if (title) title.textContent = 'Cloud lane';
     if (copy) copy.replaceChildren(line(provider || 'Provider', ' · prompts leave this machine'));
-    if (chip) chip.textContent = 'Cloud model';
+    if (chip) chip.textContent = 'Cloud lane';
     if (dot) dot.className = 'd amber';
   }
 

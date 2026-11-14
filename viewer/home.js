@@ -28,7 +28,9 @@
   };
 
   const captureText = $('capture-text');
-  const captureKind = $('capture-kind');
+  const kindGroup = $('capture-kinds');
+  const kindButtons = kindGroup ? Array.from(kindGroup.querySelectorAll('[role="radio"]')) : [];
+  let captureKind = 'fact';
   const capturePropose = $('capture-propose');
   const captureRemember = $('capture-remember');
   const needsList = $('needs-list');
@@ -36,6 +38,7 @@
   const threadList = $('thread-list');
   const memoryList = $('memory-list');
   const activityList = $('activity-list');
+  const activityRefreshed = $('activity-refreshed');
   const briefHeadline = $('brief-headline');
   const briefDetail = $('brief-detail');
   const briefDate = $('brief-date');
@@ -104,6 +107,43 @@
       month: 'short',
       day: 'numeric'
     });
+  }
+
+  const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const MONTHS = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  function two(value) {
+    return String(value).padStart(2, '0');
+  }
+
+  function clockTime(now = new Date()) {
+    return `${two(now.getHours())}:${two(now.getMinutes())}`;
+  }
+
+  function stampBriefDate(now = new Date()) {
+    if (!briefDate) return;
+    briefDate.textContent = `${WEEKDAYS[now.getDay()]}, ${now.getDate()} ${MONTHS[now.getMonth()]} · ${clockTime(now)}`;
+  }
+
+  function stampRefreshed(now = new Date()) {
+    if (!activityRefreshed) return;
+    activityRefreshed.textContent = `refreshed ${clockTime(now)}`;
+  }
+
+  function selectKind(index, focus = false) {
+    if (!kindButtons.length) return;
+    const next = Math.max(0, Math.min(kindButtons.length - 1, index));
+    captureKind = kindButtons[next].dataset.kind || 'fact';
+    kindButtons.forEach((button, position) => {
+      const on = position === next;
+      button.classList.toggle('on', on);
+      button.setAttribute('aria-checked', on ? 'true' : 'false');
+      button.tabIndex = on ? 0 : -1;
+    });
+    if (focus) kindButtons[next].focus();
   }
 
   function kindColor(kind) {
@@ -186,13 +226,7 @@
   }
 
   function renderBrief(data) {
-    if (briefDate) {
-      briefDate.textContent = new Date().toLocaleDateString(undefined, {
-        weekday: 'long',
-        month: 'long',
-        day: 'numeric'
-      });
-    }
+    stampBriefDate();
     renderGreeting();
     setHeadline(data.brief.headline);
     if (briefDetail) briefDetail.textContent = data.brief.detail;
@@ -465,6 +499,7 @@
 
   function renderAll(data) {
     homeData = data;
+    stampRefreshed();
     setStatus(data.status);
     renderBrief(data);
     renderNeeds(data);
@@ -505,7 +540,7 @@
         method: 'POST',
         body: JSON.stringify({
           content: text,
-          kind: captureKind ? captureKind.value : 'fact',
+          kind: captureKind || 'fact',
           status: remember ? 'confirmed' : 'proposed',
           source: 'home',
           confidence: remember ? 0.95 : undefined
@@ -697,6 +732,36 @@
     });
   }
 
+  if (kindGroup && kindButtons.length) {
+    kindGroup.addEventListener('click', (event) => {
+      const button = event.target.closest('.kind');
+      const index = button ? kindButtons.indexOf(button) : -1;
+      if (index >= 0) selectKind(index);
+    });
+
+    kindGroup.addEventListener('keydown', (event) => {
+      const button = event.target.closest('.kind');
+      const index = button ? kindButtons.indexOf(button) : -1;
+      if (index < 0) return;
+      const count = kindButtons.length;
+      if (event.key === ' ' || event.key === 'Enter') {
+        event.preventDefault();
+        selectKind(index);
+        return;
+      }
+      let next = -1;
+      if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = (index + 1) % count;
+      else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = (index - 1 + count) % count;
+      else if (event.key === 'Home') next = 0;
+      else if (event.key === 'End') next = count - 1;
+      if (next < 0) return;
+      event.preventDefault();
+      selectKind(next, true);
+    });
+
+    selectKind(kindButtons.findIndex((button) => button.dataset.kind === captureKind));
+  }
+
   const refreshButton = $('refresh-home');
   if (refreshButton) refreshButton.addEventListener('click', loadHome);
 
@@ -744,5 +809,6 @@
     }
   });
 
+  stampBriefDate();
   loadHome();
 })();

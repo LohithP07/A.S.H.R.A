@@ -54,18 +54,46 @@
 <div class="vignette" aria-hidden="true"></div>
 
 <header class="topbar">
-  <div class="top-copy">
-    <p class="eyebrow">Surface · Galaxy</p>
-    <h1 class="page-title">The <em>whole</em> graph.</h1>
+  <div class="top-row">
+    <div class="top-copy">
+      <p class="eyebrow">Surface · Galaxy</p>
+      <h1 class="page-title">The <em>whole</em> graph.</h1>
+    </div>
+
+    <div class="top-actions">
+      <div class="stats" aria-label="Graph statistics">
+        <div class="stat"><strong id="stat-notes">25</strong><span>notes</span></div>
+        <div class="stat"><strong id="stat-links">94</strong><span>links</span></div>
+      </div>
+      <button class="ghost-btn active" id="toggle-labels" type="button" aria-pressed="true">Labels on</button>
+      <button class="ghost-btn" id="reset-view" type="button">Reset view</button>
+    </div>
   </div>
 
-  <div class="top-actions">
-    <div class="stats" aria-label="Graph statistics">
-      <div class="stat"><strong id="stat-notes">25</strong><span>notes</span></div>
-      <div class="stat"><strong id="stat-links">94</strong><span>links</span></div>
+  <div class="searchbar" role="search">
+    <div class="search-field" id="search-field">
+      <span class="search-glyph" aria-hidden="true">⌕</span>
+      <label class="sr-only" for="galaxy-search">Search notes, memories and people</label>
+      <input class="search-input" id="galaxy-search" type="text" placeholder="Search notes, memories, people…"
+        autocomplete="off" spellcheck="false" maxlength="200"
+        role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list">
+      <span class="search-spinner" id="search-spinner" aria-hidden="true"></span>
+      <button class="search-clear" id="search-clear" type="button" aria-label="Clear search" hidden>×</button>
     </div>
-    <button class="ghost-btn active" id="toggle-labels" type="button" aria-pressed="true">Labels on</button>
-    <button class="ghost-btn" id="reset-view" type="button">Reset view</button>
+
+    <div class="search-filters" role="group" aria-label="Search categories">
+      <button class="search-filter" id="filter-notes" data-cat="notes" type="button" aria-pressed="true">
+        <span class="d" aria-hidden="true"></span>Notes
+      </button>
+      <button class="search-filter" id="filter-memories" data-cat="memories" type="button" aria-pressed="true">
+        <span class="d" aria-hidden="true"></span>Memories
+      </button>
+      <button class="search-filter" id="filter-people" data-cat="people" type="button" aria-pressed="true">
+        <span class="d" aria-hidden="true"></span>People
+      </button>
+    </div>
+
+    <div class="search-results" id="search-results" role="listbox" aria-label="Search results" hidden></div>
   </div>
 </header>
 

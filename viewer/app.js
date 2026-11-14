@@ -950,6 +950,331 @@
     if (node && node.id === id) focusNode(node, false);
   }
 
+  // ---------- search ----------
+
+  const searchShell = document.querySelector('.searchbar');
+  const searchField = $('search-field');
+  const searchInput = $('galaxy-search');
+  const searchClear = $('search-clear');
+  const searchResults = $('search-results');
+  const searchChips = Array.from(document.querySelectorAll('.search-filter'));
+
+  const SEARCH_LIMIT = 5;
+  const SEARCH_MIN_CHARS = 2;
+  const SEARCH_SNIPPET = 90;
+
+  const searchEnabled = { notes: true, memories: true, people: true };
+  const NOTE_INDEX = nodes.map((node) => {
+    const lead = `${node.label || ''} ${node.title || ''}`.toLowerCase();
+    const haystack = `${lead}\n${node.excerpt || ''}\n${node.path || ''}`.toLowerCase();
+    return { node, lead, haystack };
+  });
+
+  let searchDebounce = 0;
+  let searchToken = 0;
+  let searchRows = [];
+  let activeRow = -1;
+
+  function truncateText(value, max) {
+    const clean = String(value || '').replace(/\s+/g, ' ').trim();
+    return clean.length > max ? `${clean.slice(0, max - 1).trimEnd()}…` : clean;
+  }
+
+  function notesFor(query) {
+    const needle = query.toLowerCase();
+    const leadMatches = [];
+    const bodyMatches = [];
+    for (const entry of NOTE_INDEX) {
+      if (!entry.haystack.includes(needle)) continue;
+      (entry.lead.includes(needle) ? leadMatches : bodyMatches).push(entry.node);
+      if (leadMatches.length >= SEARCH_LIMIT) break;
+    }
+    return leadMatches.concat(bodyMatches).slice(0, SEARCH_LIMIT);
+  }
+
+  async function fetchMemories(query, kind) {
+    const params = new URLSearchParams({ q: query, limit: '8' });
+    if (kind) params.set('kind', kind);
+    const response = await fetch(`/memory/search?${params.toString()}`, {
+      headers: { Accept: 'application/json' }
+    });
+    if (!response.ok) throw new Error(`memory search failed (${response.status})`);
+    const payload = await response.json();
+    const items = Array.isArray(payload.memories) ? payload.memories : [];
+    if (kind === 'person') return items.slice(0, SEARCH_LIMIT);
+    return items.filter((item) => item && item.kind !== 'person').slice(0, SEARCH_LIMIT);
+  }
+
+  function setSearchLoading(loading) {
+    searchField.classList.toggle('loading', loading);
+    searchInput.setAttribute('aria-busy', String(loading));
+  }
+
+  function setResultsOpen(open) {
+    searchResults.hidden = !open;
+    searchInput.setAttribute('aria-expanded', String(open));
+    searchField.classList.toggle('open', open);
+    if (!open) {
+      searchInput.removeAttribute('aria-activedescendant');
+      activeRow = -1;
+    }
+  }
+
+  function buildSearchRow(kind, item) {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.tabIndex = -1;
+    row.className = 'search-row';
+    row.setAttribute('role', 'option');
+    row.setAttribute('aria-selected', 'false');
+
+    const dot = document.createElement('span');
+    dot.className = 'search-row-dot';
+    dot.setAttribute('aria-hidden', 'true');
+    dot.style.setProperty('--dot', kind === 'notes' ? 'var(--cyan)' : kind === 'memories' ? 'var(--pink)' : 'var(--lime)');
+
+    const main = document.createElement('span');
+    main.className = 'search-row-main';
+
+    if (kind === 'notes') {
+      const title = document.createElement('span');
+      title.className = 'search-row-title';
+      title.textContent = item.label || item.title || item.path || 'Untitled note';
+      const meta = document.createElement('span');
+      meta.className = 'search-row-meta';
+      meta.textContent = `note · ${item.group || 'unsorted'}`;
+      main.append(title, meta);
+      row.append(dot, main);
+      return { el: row, kind, node: item };
+    }
+
+    const snippet = document.createElement('span');
+    snippet.className = 'search-row-snippet';
+    snippet.textContent = truncateText(item.content || item.label || '', SEARCH_SNIPPET);
+    const meta = document.createElement('span');
+    meta.className = 'search-row-meta';
+    meta.textContent = kind === 'people' ? 'person' : (item.kind || 'memory');
+    main.append(snippet, meta);
+
+    const kindTag = document.createElement('span');
+    kindTag.className = 'search-row-kind';
+    kindTag.textContent = kind === 'people' ? 'person' : 'memory';
+    row.append(dot, main, kindTag);
+    return { el: row, kind, memory: item };
+  }
+
+  function activateSearchRow(index) {
+    const record = searchRows[index];
+    if (!record) return;
+    if (record.kind === 'notes') {
+      closeSearch();
+      focusNode(record.node);
+      return;
+    }
+    const id = record.memory && record.memory.id;
+    if (id) window.location.assign(`brain.html?memory=${encodeURIComponent(id)}`);
+  }
+
+  function setActiveRow(index, scroll = true) {
+    if (!searchRows.length) {
+      activeRow = -1;
+      searchInput.removeAttribute('aria-activedescendant');
+      return;
+    }
+    const next = Math.max(0, Math.min(index, searchRows.length - 1));
+    searchRows.forEach((record, i) => {
+      const on = i === next;
+      record.el.classList.toggle('is-active', on);
+      record.el.setAttribute('aria-selected', String(on));
+    });
+    activeRow = next;
+    const row = searchRows[next];
+    searchInput.setAttribute('aria-activedescendant', row.el.id);
+    if (scroll) row.el.scrollIntoView({ block: 'nearest' });
+  }
+
+  function closeSearch() {
+    setResultsOpen(false);
+    searchResults.replaceChildren();
+    searchRows = [];
+    activeRow = -1;
+    setSearchLoading(false);
+    searchToken += 1;
+  }
+
+  function clearSearch() {
+    searchInput.value = '';
+    searchClear.hidden = true;
+    closeSearch();
+  }
+
+  function renderSearch(data, query, loading) {
+    const fragment = document.createDocumentFragment();
+    searchRows = [];
+    let total = 0;
+
+    const addSection = (label, kind, items) => {
+      if (!items || !items.length) return;
+      total += items.length;
+      const section = document.createElement('div');
+      section.className = 'search-section';
+      section.setAttribute('role', 'group');
+      section.setAttribute('aria-label', label);
+
+      const head = document.createElement('p');
+      head.className = 'search-section-label';
+      const name = document.createElement('span');
+      name.textContent = label;
+      const count = document.createElement('span');
+      count.className = 'search-section-count';
+      count.textContent = String(items.length);
+      head.append(name, count);
+      section.append(head);
+
+      items.forEach((item) => {
+        const record = buildSearchRow(kind, item);
+        section.append(record.el);
+        searchRows.push(record);
+      });
+      fragment.append(section);
+    };
+
+    addSection('Notes', 'notes', data.notes);
+    addSection('Memories', 'memories', data.memories);
+    addSection('People', 'people', data.people);
+
+    const anyEnabled = Object.values(searchEnabled).some(Boolean);
+    const wantsMore = searchEnabled.memories || searchEnabled.people;
+    if (!total && !loading) {
+      const empty = document.createElement('p');
+      empty.className = 'search-empty';
+      if (!anyEnabled) {
+        empty.textContent = 'All categories are off. Switch on Notes, Memories or People to search.';
+      } else if (query.length < SEARCH_MIN_CHARS && wantsMore) {
+        empty.textContent = 'Nothing in notes yet — memories and people start at 2 characters.';
+      } else {
+        empty.append(document.createTextNode('Nothing matches '));
+        const code = document.createElement('code');
+        code.textContent = `“${query}”`;
+        empty.append(code, document.createTextNode('.'));
+      }
+      fragment.append(empty);
+    }
+
+    searchResults.replaceChildren(fragment);
+    searchRows.forEach((record, index) => {
+      record.el.id = `search-opt-${index}`;
+      record.el.addEventListener('click', () => activateSearchRow(index));
+      record.el.addEventListener('mouseenter', () => setActiveRow(index, false));
+    });
+    setResultsOpen(true);
+    if (searchRows.length) setActiveRow(0, false);
+    else activeRow = -1;
+  }
+
+  async function runSearch() {
+    const query = searchInput.value.trim();
+    searchClear.hidden = searchInput.value.length === 0;
+
+    if (!query) {
+      closeSearch();
+      return;
+    }
+
+    const token = ++searchToken;
+    const data = { notes: [], memories: null, people: null };
+    if (searchEnabled.notes) data.notes = notesFor(query);
+
+    const canQueryApi = query.length >= SEARCH_MIN_CHARS;
+    const jobs = [];
+    if (canQueryApi && searchEnabled.memories) {
+      jobs.push(fetchMemories(query)
+        .then((items) => { data.memories = items; })
+        .catch((error) => { console.warn('memory search unavailable:', error.message); data.memories = []; }));
+    }
+    if (canQueryApi && searchEnabled.people) {
+      jobs.push(fetchMemories(query, 'person')
+        .then((items) => { data.people = items; })
+        .catch((error) => { console.warn('person search unavailable:', error.message); data.people = []; }));
+    }
+
+    let pending = jobs.length;
+    setSearchLoading(pending > 0);
+    renderSearch(data, query, pending > 0);
+    if (!pending) return;
+
+    await Promise.allSettled(jobs);
+    if (token !== searchToken || searchInput.value.trim() !== query) return;
+    setSearchLoading(false);
+    renderSearch(data, query, false);
+  }
+
+  function scheduleSearch(delay = 180) {
+    window.clearTimeout(searchDebounce);
+    searchDebounce = window.setTimeout(runSearch, delay);
+  }
+
+  function handleSearchEscape() {
+    if (!searchResults.hidden) {
+      closeSearch();
+      return true;
+    }
+    if (searchInput.value) {
+      clearSearch();
+      return true;
+    }
+    if (document.activeElement === searchInput) {
+      searchInput.blur();
+      return true;
+    }
+    return false;
+  }
+
+  searchInput.addEventListener('input', () => {
+    searchClear.hidden = searchInput.value.length === 0;
+    scheduleSearch(180);
+  });
+
+  searchInput.addEventListener('focus', () => {
+    if (searchInput.value.trim()) scheduleSearch(0);
+  });
+
+  searchInput.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      if (!searchRows.length) {
+        if (searchInput.value.trim()) scheduleSearch(0);
+        return;
+      }
+      event.preventDefault();
+      const step = event.key === 'ArrowDown' ? 1 : -1;
+      const start = activeRow < 0 ? (step > 0 ? -1 : searchRows.length) : activeRow;
+      setActiveRow(start + step);
+    } else if (event.key === 'Enter' && activeRow >= 0) {
+      event.preventDefault();
+      activateSearchRow(activeRow);
+    }
+  });
+
+  searchClear.addEventListener('click', () => {
+    clearSearch();
+    searchInput.focus();
+  });
+
+  searchChips.forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const category = chip.dataset.cat;
+      if (!(category in searchEnabled)) return;
+      searchEnabled[category] = !searchEnabled[category];
+      chip.setAttribute('aria-pressed', String(searchEnabled[category]));
+      if (searchInput.value.trim()) scheduleSearch(0);
+    });
+  });
+
+  document.addEventListener('pointerdown', (event) => {
+    if (searchResults.hidden || !searchShell) return;
+    if (!searchShell.contains(event.target)) closeSearch();
+  });
+
   // ---------- UI events ----------
 
   $('panel-close').addEventListener('click', dismissFocus);
@@ -972,8 +1297,17 @@
 
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
+      if (handleSearchEscape()) return;
       if (panel.classList.contains('open')) dismissFocus();
       else if (clusterIds) clearFocus();
+    } else if (event.key === '/' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+      const target = event.target;
+      const typing = target && (target.matches('input, textarea, select') || target.isContentEditable);
+      if (!typing) {
+        event.preventDefault();
+        searchInput.focus();
+        searchInput.select();
+      }
     } else if ((event.key === 'r' || event.key === 'R') && !event.metaKey && !event.ctrlKey && !event.target.matches('input, textarea')) {
       $('reset-view').click();
     }

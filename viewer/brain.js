@@ -34,7 +34,9 @@
     selectedId: null,
     detail: null,
     forgetArmed: false,
-    busy: false
+    busy: false,
+    loading: false,
+    loaded: false
   };
 
   /* ---------------------------------------------------------------- utils */
@@ -164,6 +166,8 @@
   }
 
   async function refresh() {
+    state.loading = true;
+    renderLoading();
     try {
       const [listing, graph] = await Promise.all([fetchList(), fetchGraph()]);
       state.memories = listing.memories;
@@ -191,8 +195,55 @@
       renderTimeline();
       renderGraph();
       updateSelectionClasses();
+      state.loading = false;
+      state.loaded = true;
+      return true;
     } catch (error) {
+      state.loading = false;
+      if (state.loaded) {
+        renderLibrary();
+        renderTimeline();
+      } else {
+        renderLoadError();
+      }
       toast(error.message || 'Could not load memory.', true);
+      return false;
+    }
+  }
+
+  /* -------------------------------------------------------------- loading */
+
+  function skeletonRow(index) {
+    const row = el('div', 'skeleton-row');
+    row.style.setProperty('--w', `${92 - (index % 4) * 9}%`);
+    const meta = el('div', 'skeleton-meta');
+    meta.append(el('span', 'skeleton-chip'), el('span', 'skeleton-chip short'));
+    row.append(el('span', 'skeleton-line'), meta);
+    return row;
+  }
+
+  function renderSkeleton(view, label, rows) {
+    view.replaceChildren();
+    view.setAttribute('aria-busy', 'true');
+    view.append(el('p', 'sr-only', label));
+    const list = el('div', 'skeleton-list');
+    list.setAttribute('aria-hidden', 'true');
+    for (let index = 0; index < rows; index += 1) list.append(skeletonRow(index));
+    view.append(list);
+  }
+
+  function renderLoading() {
+    renderSkeleton($('view-library'), 'Loading memories…', 4);
+    renderSkeleton($('view-timeline'), 'Loading timeline…', 4);
+  }
+
+  function renderLoadError() {
+    const copy = 'Memory did not load. Check the local server and try again.';
+    for (const id of ['view-library', 'view-timeline']) {
+      const view = $(id);
+      view.replaceChildren();
+      view.removeAttribute('aria-busy');
+      view.append(el('p', 'list-empty', copy));
     }
   }
 
@@ -290,6 +341,7 @@
   function renderLibrary() {
     const view = $('view-library');
     view.replaceChildren();
+    view.removeAttribute('aria-busy');
 
     const count = state.memories.length;
     const head = el('div', 'library-head');
@@ -343,6 +395,7 @@
   function renderTimeline() {
     const view = $('view-timeline');
     view.replaceChildren();
+    view.removeAttribute('aria-busy');
     const rows = [...state.memories].sort((a, b) => b.created_at - a.created_at);
     if (!rows.length) {
       view.append(el('p', 'list-empty', 'Nothing on the timeline yet.'));
@@ -400,7 +453,7 @@
 
   /* --------------------------------------------------------------- detail */
 
-  async function selectMemory(id) {
+  async function selectMemory(id, options = {}) {
     if (!id) {
       clearSelection();
       return;
@@ -415,14 +468,37 @@
       if (state.selectedId !== id) return;
       renderDetail(data);
     } catch (error) {
-      toast(error.message, true);
+      toast(options.deepLink ? 'That memory could not be found.' : error.message, true);
+      if (options.deepLink && state.selectedId === id) clearSelection();
     }
+  }
+
+  /* ------------------------------------------------------------ deep links */
+
+  function removeMemoryParam() {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has('memory')) return;
+    url.searchParams.delete('memory');
+    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+  }
+
+  async function applyDeepLink() {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('memory')) return;
+    const id = String(params.get('memory') || '').trim();
+    if (!id) {
+      toast('That memory link is missing an id.', true);
+      removeMemoryParam();
+      return;
+    }
+    await selectMemory(id, { deepLink: true });
   }
 
   function clearSelection() {
     state.selectedId = null;
     state.detail = null;
     resetForget();
+    removeMemoryParam();
     $('detail-body').hidden = true;
     $('detail-empty').hidden = false;
     closeDetail();
@@ -1273,11 +1349,12 @@
 
   /* ------------------------------------------------------------------ init */
 
-  function init() {
+  async function init() {
     bindEvents();
     resizeCanvas();
     if (window.ASHRALane) window.ASHRALane.load();
-    refresh();
+    const loaded = await refresh();
+    if (loaded) await applyDeepLink();
   }
 
   if (document.readyState === 'loading') {

@@ -164,6 +164,22 @@ body {
   white-space: nowrap;
 }
 .link:hover { color: #fff; }
+.head-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px 10px;
+  margin-left: auto;
+}
+.activity-card .head { flex-wrap: wrap; }
+.refreshed {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  white-space: nowrap;
+}
 
 /* ---------------- brief ---------------- */
 
@@ -429,25 +445,30 @@ body {
   border-color: rgba(167, 139, 250, 0.55);
   box-shadow: 0 0 0 3px rgba(124, 107, 255, 0.16);
 }
-.cap-row { display: flex; align-items: center; gap: 8px; margin-top: 11px; }
-.cap-row select {
-  height: 36px;
-  max-width: 150px;
-  padding: 0 30px 0 11px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background-color: rgba(255, 255, 255, 0.04);
-  color: var(--ink-2);
-  font-size: 13px;
-  appearance: none;
-  background-image: linear-gradient(45deg, transparent 50%, var(--faint) 50%),
-    linear-gradient(135deg, var(--faint) 50%, transparent 50%);
-  background-position: calc(100% - 16px) 15px, calc(100% - 11px) 15px;
-  background-size: 5px 5px, 5px 5px;
-  background-repeat: no-repeat;
+.kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
 }
-.cap-row select:focus { outline: none; border-color: rgba(167, 139, 250, 0.55); }
-.cap-actions { display: flex; gap: 7px; margin-left: auto; }
+.kind {
+  padding: 5px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+.kind:hover { border-color: var(--line-2); color: var(--ink-2); }
+.kind.on {
+  background: rgba(167, 139, 250, 0.18);
+  border-color: rgba(167, 139, 250, 0.45);
+  color: #e6dcff;
+}
+.cap-row { display: flex; align-items: center; gap: 8px; margin-top: 13px; }
+.cap-actions { display: flex; gap: 7px; }
 
 /* memories */
 
@@ -769,7 +790,6 @@ body {
 /* a card that gets narrow stacks its controls */
 @container card (max-width: 340px) {
   .cap-row { flex-wrap: wrap; }
-  .cap-actions { margin-left: 0; }
   .card h2 { font-size: 21px; }
 }
 

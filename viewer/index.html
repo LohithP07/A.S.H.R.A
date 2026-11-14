@@ -78,7 +78,10 @@
             <p class="kick">Activity</p>
             <h2 id="activity-title">What just happened</h2>
           </div>
-          <button class="link" id="refresh-home" type="button">Refresh</button>
+          <div class="head-tools">
+            <span class="refreshed" id="activity-refreshed">refreshed —</span>
+            <button class="link" id="refresh-home" type="button">Refresh</button>
+          </div>
         </div>
         <ul class="activity-list" id="activity-list"></ul>
       </section>
@@ -118,19 +121,19 @@
       <h2 id="capture-title">Teach the brain</h2>
       <label class="sr-only" for="capture-text">Memory text</label>
       <textarea id="capture-text" rows="3" maxlength="2000" placeholder="e.g. We ship wholesale orders on Fridays…"></textarea>
+      <p class="sr-only" id="capture-kind-label">Memory kind</p>
+      <div class="kinds" id="capture-kinds" role="radiogroup" aria-labelledby="capture-kind-label">
+        <button class="kind on" type="button" role="radio" aria-checked="true" tabindex="0" data-kind="fact">Fact</button>
+        <button class="kind" type="button" role="radio" aria-checked="false" tabindex="-1" data-kind="preference">Preference</button>
+        <button class="kind" type="button" role="radio" aria-checked="false" tabindex="-1" data-kind="person">Person</button>
+        <button class="kind" type="button" role="radio" aria-checked="false" tabindex="-1" data-kind="project">Project</button>
+        <button class="kind" type="button" role="radio" aria-checked="false" tabindex="-1" data-kind="event">Event</button>
+        <button class="kind" type="button" role="radio" aria-checked="false" tabindex="-1" data-kind="task">Task</button>
+        <button class="kind" type="button" role="radio" aria-checked="false" tabindex="-1" data-kind="document">Document</button>
+        <button class="kind" type="button" role="radio" aria-checked="false" tabindex="-1" data-kind="procedure">Procedure</button>
+        <button class="kind" type="button" role="radio" aria-checked="false" tabindex="-1" data-kind="observation">Observation</button>
+      </div>
       <div class="cap-row">
-        <label class="sr-only" for="capture-kind">Memory kind</label>
-        <select id="capture-kind">
-          <option value="fact">Fact</option>
-          <option value="preference">Preference</option>
-          <option value="person">Person</option>
-          <option value="project">Project</option>
-          <option value="event">Event</option>
-          <option value="task">Task</option>
-          <option value="document">Document</option>
-          <option value="procedure">Procedure</option>
-          <option value="observation">Observation</option>
-        </select>
         <div class="cap-actions">
           <button class="btn" id="capture-propose" type="button">Propose</button>
           <button class="btn go" id="capture-remember" type="button">Remember</button>

@@ -494,6 +494,12 @@ def make_provider(config: AppConfig) -> ChatProvider:
         return AnthropicProvider(config)
     if config.provider in {"nvidia", "openai_compatible"}:
         return OpenAICompatibleProvider(config)
+    if config.provider in {"ollama", "local"}:
+        # Imported here so the local adapter's dependencies never load on a
+        # cloud-only path, and so the two modules can stay independent.
+        from .ollama import OllamaProvider
+
+        return OllamaProvider(config)
     raise ProviderError(
         f"Unsupported provider '{config.provider}'. Add it in ashra/providers.py."
     )

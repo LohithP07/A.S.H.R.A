@@ -18,15 +18,39 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from . import sensitivity
 from .config import AppConfig, load_config
-from .errors import NotConfiguredError
+from .credentials import get_vault
+from .errors import NotConfiguredError, ProviderError
 from .memory import MemoryStore, is_remember_request, remember_body
 from .notes import Note, load_notes
 from .persona import compose_system_prompt, small_talk_reply
 from .providers import ChatProvider, make_provider
 from .recall import recall_reply
 from .retrieval import ScoredNote, score_notes
+from .router import (
+    LANE_CLOUD,
+    LANE_LOCAL,
+    LANE_REFUSAL,
+    LaneRouter,
+    Route,
+)
 from .sessions import SessionBackend, SessionStore
+
+SUPPORTED_PROVIDERS = {"anthropic", "nvidia", "openai_compatible", "ollama", "local"}
+
+REFUSAL_ANSWER = (
+    "I can't pass this to a model. It looks like secret material — a credential, "
+    "financial detail, or health information — and A.S.H.R.A never sends that to a "
+    "model and never automates it. Remove the secret and ask again, or handle this "
+    "one yourself. Nothing left this machine."
+)
+
+LOCAL_DOWN_ANSWER = (
+    "The local model isn't available right now ({detail}). I did not fall back to "
+    "the cloud: this payload is {sensitivity}, and private content stays on this "
+    "machine. Check Ollama, then retry."
+)
 
 
 @dataclass(frozen=True)
@@ -37,6 +61,9 @@ class ChatResult:
     session_id: str
     model: str
     proposals: tuple[dict[str, Any], ...] = ()
+    lane: str = ""
+    sensitivity: str = ""
+    route: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -51,6 +78,7 @@ class Prepared:
     memories: tuple[dict[str, Any], ...] = ()
     proposals: tuple[dict[str, Any], ...] = ()
     immediate: ChatResult | None = None
+    sensitivity: str = "internal"
 
 
 # Backwards-compatible alias for the original private name.
@@ -65,6 +93,9 @@ class ChatService:
         notes_loader: Callable[[], list[Note]] = load_notes,
         provider_factory: Callable[[AppConfig], ChatProvider] = make_provider,
         memory: MemoryStore | None = None,
+        router: LaneRouter | None = None,
+        audit: Callable[[dict[str, Any]], None] | None = None,
+        vault: object | None = None,
     ) -> None:
         self.base_dir = base_dir
         self.config_path = base_dir / "config.json"
@@ -72,6 +103,9 @@ class ChatService:
         self.notes_loader = notes_loader
         self.provider_factory = provider_factory
         self.memory = memory
+        self.router = router
+        self.audit = audit
+        self.vault = vault if vault is not None else get_vault()
 
     # ------------------------------------------------------------------
     # shared pipeline
@@ -183,10 +217,10 @@ class ChatService:
                 "A.S.H.R.A is not configured. Paste your provider API key into "
                 "config.json, set the model, then reload."
             )
-        if config.provider not in {"anthropic", "nvidia", "openai_compatible"}:
+        if config.provider not in SUPPORTED_PROVIDERS:
             raise NotConfiguredError(
                 f"Provider '{config.provider}' is not implemented yet. "
-                "Use 'anthropic', 'nvidia', or 'openai_compatible'."
+                f"Use one of: {', '.join(sorted(SUPPORTED_PROVIDERS))}."
             )
 
         self.sessions.max_messages = max(2, config.max_history)
@@ -210,6 +244,12 @@ class ChatService:
                 self.memory.search(question, limit=config.max_memories)
             )
 
+        payload_sensitivity = self.payload_sensitivity(
+            question,
+            matches,
+            memories,
+        )
+
         return _Prepared(
             question=question,
             session_id=session_id,
@@ -218,7 +258,158 @@ class ChatService:
             matches=matches,
             memories=memories,
             proposals=proposals,
+            sensitivity=payload_sensitivity,
         )
+
+    # ------------------------------------------------------------------
+    # lanes
+    # ------------------------------------------------------------------
+    @staticmethod
+    def payload_sensitivity(
+        question: str,
+        matches: list[ScoredNote] = (),
+        memories: tuple[dict[str, Any], ...] = (),
+    ) -> str:
+        """The most private class present in anything the model would read.
+
+        A model sees the question, the retrieved note bodies, and the recalled
+        memories.  The class of the request is the highest of those, never the
+        lowest — an email address in a retrieved note makes the whole call
+        private.
+        """
+        parts = [question]
+        parts.extend(item.note.text for item in matches)
+        parts.extend(str(memory.get("content") or "") for memory in memories)
+        return sensitivity.classify("\n".join(parts))
+
+    def route_for(self, prepared: Prepared, task: str = "general_chat") -> Route:
+        router = self.router or LaneRouter(
+            allow_cloud_for=prepared.config.privacy_allow_cloud,
+            refuse=prepared.config.privacy_refuse,
+            default_lane=prepared.config.privacy_default_lane,
+        )
+        route = router.decide(task, prepared.sensitivity)
+        if route.lane == LANE_CLOUD and not prepared.config.cloud_configured:
+            # An unconfigured cloud lane is not a lane.  Staying local keeps the
+            # audit honest and avoids a failed request on every turn.
+            return Route(
+                lane=LANE_LOCAL,
+                task=route.task,
+                sensitivity=route.sensitivity,
+                reason="cloud lane is not configured, so the local lane applies.",
+                fallback=None,
+            )
+        return route
+
+    def _record(
+        self,
+        route: Route,
+        *,
+        model: str,
+        status: str = "ok",
+        detail: str = "",
+    ) -> None:
+        if self.audit is None:
+            return
+        payload = route.as_dict()
+        payload["model"] = model
+        payload["status"] = status
+        if detail:
+            payload["detail"] = detail
+        try:
+            self.audit(payload)
+        except Exception:  # pragma: no cover - auditing must not break chat
+            pass
+
+    def _provider(self, prepared: Prepared, lane: str) -> ChatProvider:
+        return self.provider_for(prepared.config, lane)
+
+    def provider_for(self, config: AppConfig, lane: str) -> ChatProvider:
+        """Build the provider for a lane from a config snapshot."""
+        if lane == LANE_LOCAL:
+            return self.provider_factory(config.for_local())
+        return self.provider_factory(config.for_cloud(self.vault))
+
+    def _dispatch(
+        self,
+        prepared: Prepared,
+        system: str,
+        messages: list[dict[str, str]],
+        *,
+        task: str = "general_chat",
+    ) -> tuple[str, Route, str]:
+        """Answer through the routed lane, or explain why there is no answer.
+
+        Returns ``(answer, route, model)``.  Local failure never reaches the
+        cloud; cloud failure may fall back to local because that direction is
+        safe.
+        """
+        route = self.route_for(prepared, task)
+
+        if route.lane == LANE_REFUSAL:
+            self._record(route, model="", status="refused", detail="secret-class")
+            return REFUSAL_ANSWER, route, ""
+
+        if route.lane == LANE_LOCAL:
+            model = prepared.config.for_local().model
+            try:
+                answer = self._provider(prepared, LANE_LOCAL).complete(system, messages)
+            except ProviderError as exc:
+                self._record(route, model=model, status="error", detail=str(exc))
+                return (
+                    LOCAL_DOWN_ANSWER.format(
+                        detail=exc,
+                        sensitivity=route.sensitivity,
+                    ),
+                    route,
+                    model,
+                )
+            self._record(route, model=model)
+            return answer, route, model
+
+        # Cloud lane, with a local fallback that never reverses the direction.
+        cloud = prepared.config.for_cloud(self.vault)
+        model = cloud.model
+        try:
+            answer = self._provider(prepared, LANE_CLOUD).complete(system, messages)
+        except ProviderError as exc:
+            fallback = route.fallback
+            if fallback != LANE_LOCAL:
+                self._record(route, model=model, status="error", detail=str(exc))
+                raise
+            local_model = prepared.config.for_local().model
+            try:
+                answer = self._provider(prepared, LANE_LOCAL).complete(system, messages)
+            except ProviderError as local_exc:
+                self._record(
+                    route,
+                    model=local_model,
+                    status="error",
+                    detail=f"cloud: {exc}; local: {local_exc}",
+                )
+                return (
+                    LOCAL_DOWN_ANSWER.format(
+                        detail=local_exc,
+                        sensitivity=route.sensitivity,
+                    ),
+                    route,
+                    local_model,
+                )
+            self._record(
+                route,
+                model=local_model,
+                status="degraded",
+                detail=f"cloud unavailable: {exc}",
+            )
+            return (
+                f"{answer}\n\n_Answered locally: the cloud lane was unavailable "
+                f"({exc})._",
+                route,
+                local_model,
+            )
+
+        self._record(route, model=model)
+        return answer, route, model
 
     @staticmethod
     def _sources(
@@ -282,8 +473,7 @@ class ChatService:
         messages = prepared.history + [
             {"role": "user", "content": prepared.question}
         ]
-        provider = self.provider_factory(prepared.config)
-        answer = provider.complete(system, messages)
+        answer, route, model = self._dispatch(prepared, system, messages)
         self.sessions.append_exchange(prepared.session_id, prepared.question, answer)
 
         return ChatResult(
@@ -291,8 +481,11 @@ class ChatService:
             nodes=[item.note.id for item in prepared.matches],
             sources=self._sources(prepared.matches, prepared.memories),
             session_id=prepared.session_id,
-            model=prepared.config.model,
+            model=model or prepared.config.model,
             proposals=prepared.proposals,
+            lane=route.lane,
+            sensitivity=route.sensitivity,
+            route=route.as_dict(),
         )
 
     # ------------------------------------------------------------------
@@ -347,8 +540,7 @@ class ChatService:
         messages = prepared.history + [
             {"role": "user", "content": prepared.question}
         ]
-        provider = self.provider_factory(prepared.config)
-        answer = provider.complete(system, messages)
+        answer, route, model = self._dispatch(prepared, system, messages)
         self.sessions.append_exchange(prepared.session_id, prepared.question, answer)
 
         for chunk in _chunks(answer):
@@ -360,8 +552,11 @@ class ChatService:
             "nodes": nodes,
             "sources": sources,
             "session_id": prepared.session_id,
-            "model": prepared.config.model,
+            "model": model or prepared.config.model,
             "memories_proposed": [item.get("id") for item in prepared.proposals],
+            "lane": route.lane,
+            "sensitivity": route.sensitivity,
+            "route": route.as_dict(),
         }
 
     def _stream_result(self, result: ChatResult) -> Iterator[dict[str, object]]:
@@ -380,6 +575,9 @@ class ChatService:
             "session_id": result.session_id,
             "model": result.model,
             "memories_proposed": [item.get("id") for item in result.proposals],
+            "lane": result.lane,
+            "sensitivity": result.sensitivity,
+            "route": result.route,
         }
 
 

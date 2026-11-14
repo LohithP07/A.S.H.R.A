@@ -33,7 +33,9 @@ from .credentials import CredentialVault, MemoryVault, get_vault
 from .db import Database, SQLiteSessionStore
 from .errors import BrainError, ConfigError, NotConfiguredError, ProviderError
 from .integrations import IntegrationConfig, IntegrationManager, load_integrations
+from .ollama import OllamaProvider, local_health
 from .orchestrator import Orchestrator, OrchestratorResult
+from .router import LANE_CLOUD, LANE_LOCAL, LANE_REFUSAL, LaneRouter, Route
 from .tools import Permission, ToolRegistry, build_default_registry
 
 __version__ = "0.8.0"
@@ -57,8 +59,13 @@ __all__ = [
     "IngestResult",
     "IntegrationConfig",
     "IntegrationManager",
+    "LANE_CLOUD",
+    "LANE_LOCAL",
+    "LANE_REFUSAL",
+    "LaneRouter",
     "MemoryVault",
     "NotConfiguredError",
+    "OllamaProvider",
     "Orchestrator",
     "OrchestratorResult",
     "Permission",
@@ -66,6 +73,7 @@ __all__ = [
     "ProviderError",
     "Record",
     "ReplayConnector",
+    "Route",
     "SPAWN_TOOL_NAME",
     "SQLiteSessionStore",
     "Source",
@@ -77,4 +85,5 @@ __all__ = [
     "get_vault",
     "load_config",
     "load_integrations",
+    "local_health",
 ]

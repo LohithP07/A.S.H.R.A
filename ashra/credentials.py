@@ -287,3 +287,47 @@ def get_vault(prefer: str = "auto") -> CredentialVault:
             raise CredentialError("Windows Credential Manager is not available here.")
         return MemoryVault()
     raise ValueError(f"Unknown vault '{prefer}'. Use auto, windows, or memory.")
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Setup command: ``python -m ashra.credentials <action> [ref]``.
+
+    Values are read from a hidden prompt, never from the command line, so a
+    secret does not land in shell history or in a process listing.
+    """
+    import argparse
+    import getpass
+
+    parser = argparse.ArgumentParser(
+        prog="python -m ashra.credentials",
+        description="Manage A.S.H.R.A credentials in Windows Credential Manager.",
+    )
+    parser.add_argument("action", choices=("set", "check", "delete"))
+    parser.add_argument("ref", help="Reference name, for example ashra/cloud")
+    args = parser.parse_args(argv)
+
+    vault = get_vault("auto")
+    if not vault.available():
+        print("This vault is not persistent; values will disappear with the process.")
+        return 2
+
+    reference = validate_ref(args.ref)
+    if args.action == "check":
+        print("present" if vault.get(reference) else "missing")
+        return 0
+
+    if args.action == "delete":
+        print("deleted" if vault.delete(reference) else "absent")
+        return 0
+
+    value = getpass.getpass(f"Value for {reference}: ").strip()
+    if not value:
+        print("Refusing to store an empty value.")
+        return 2
+    vault.set(reference, value)
+    print(f"stored {reference}")
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())

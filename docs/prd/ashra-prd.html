@@ -191,7 +191,7 @@
     <div><span>Status</span><span>For review and approval</span></div>
     <div><span>Classification</span><span>Local / private</span></div>
     <div><span>Platform</span><span>Windows 11, single user</span></div>
-    <div><span>Baseline</span><span>v0.7.1 · commit 5b774ac</span></div>
+    <div><span>Baseline</span><span>v0.8.0 · commit 42b491d · 266 tests</span></div>
   </div>
 
   <h3>Purpose of this document</h3>
@@ -243,13 +243,13 @@
     <div class="toc-row"><span class="n">12</span><span class="t">Data model</span><span class="pg" data-pg="sec12">26</span></div>
     <div class="toc-row"><span class="n">13</span><span class="t">Functional requirements</span><span class="pg" data-pg="sec13">28</span></div>
     <div class="toc-row"><span class="n">14</span><span class="t">Non-functional requirements</span><span class="pg" data-pg="sec14">32</span></div>
-    <div class="toc-row"><span class="n">15</span><span class="t">Roadmap and milestones</span><span class="pg" data-pg="sec15">33</span></div>
-    <div class="toc-row"><span class="n">16</span><span class="t">Risks and mitigations</span><span class="pg" data-pg="sec16">35</span></div>
+    <div class="toc-row"><span class="n">15</span><span class="t">Roadmap and milestones</span><span class="pg" data-pg="sec15">34</span></div>
+    <div class="toc-row"><span class="n">16</span><span class="t">Risks and mitigations</span><span class="pg" data-pg="sec16">36</span></div>
     <div class="toc-row"><span class="n">17</span><span class="t">Acceptance criteria and metrics</span><span class="pg" data-pg="sec17">37</span></div>
-    <div class="toc-row"><span class="n">18</span><span class="t">Decisions log and open questions</span><span class="pg" data-pg="sec18">38</span></div>
-    <div class="toc-row"><span class="n">A</span><span class="t">Glossary</span><span class="pg" data-pg="appA">40</span></div>
-    <div class="toc-row"><span class="n">B</span><span class="t">Configuration reference</span><span class="pg" data-pg="appB">41</span></div>
-    <div class="toc-row"><span class="n">C</span><span class="t">Phase history</span><span class="pg" data-pg="appC">43</span></div>
+    <div class="toc-row"><span class="n">18</span><span class="t">Decisions log and open questions</span><span class="pg" data-pg="sec18">39</span></div>
+    <div class="toc-row"><span class="n">A</span><span class="t">Glossary</span><span class="pg" data-pg="appA">41</span></div>
+    <div class="toc-row"><span class="n">B</span><span class="t">Configuration reference</span><span class="pg" data-pg="appB">42</span></div>
+    <div class="toc-row"><span class="n">C</span><span class="t">Phase history</span><span class="pg" data-pg="appC">44</span></div>
   </div>
 
   <h3>Reading paths</h3>
@@ -284,7 +284,7 @@
   <p>Personal administration is not hard because any single task is hard. It is hard because the inputs are scattered and the cost of switching is high. An ask arrives in email, a deadline sits in a calendar invite, a promise is made in a chat, and a bill is due on a date nobody wrote down. Existing assistants solve this by sending everything to a cloud service, which is exactly the trade the owner does not want to make.</p>
 
   <h3>The product bet</h3>
-  <p>A small local model, paired with deterministic pipelines, is good enough for triage, extraction, summarisation, and short drafts. Complex planning and tool orchestration should not be delegated to a 3B–4B model. Instead, the system keeps a structured life model, uses rules for anything that must be exact, and uses the local model only where language understanding is genuinely required. Cloud models remain available for non-sensitive work.</p>
+  <p>A small local model, paired with deterministic pipelines, is good enough for triage, extraction, summarisation, and short drafts. Complex planning and tool orchestration should not be delegated to a 2B–4B model. Instead, the system keeps a structured life model, uses rules for anything that must be exact, and uses the local model only where language understanding is genuinely required. Cloud models remain available for non-sensitive work.</p>
 
   <div class="callout">
     <span class="label">Core promise</span>
@@ -305,7 +305,7 @@
   <p>Sending to new recipients, deleting mail, changing calendars, payments, purchases, health actions, smart-home control, arbitrary shell, and any reading of personal chat accounts are out of scope. So is multi-user support, macOS, Linux, and mobile native apps. The architecture leaves room for them; the release does not pretend to include them.</p>
 
   <h3>Delivery shape</h3>
-  <p>Work proceeds in small, reviewable phases on named branches, each squash-merged after review. The immediate next step is the connector foundation, which requires no credentials and no model, followed by the local model router so that privacy rules are enforced before any real email is processed.</p>
+  <p>Work proceeds in small, reviewable phases on named branches, each squash-merged after review. The connector foundation and the local model router are complete, so privacy rules are already enforced; the immediate next step is reading real email through them.</p>
 </div>
 
 <!-- ================= 2. PRODUCT DEFINITION ================= -->
@@ -616,7 +616,7 @@
     <div class="lane">
       <h4>Local lane</h4>
       <ul>
-        <li>3B–4B model through Ollama</li>
+        <li>2B–4B model through Ollama (<code>qwen3.5:2b-q4_K_M</code> default)</li>
         <li>Email, calendar, contacts, tasks</li>
         <li>Classification, extraction, summaries, short drafts</li>
         <li>No network egress</li>
@@ -1339,7 +1339,8 @@ WHERE e.to_id = ? AND e.type = 'promised_to' AND m.superseded_by IS NULL;</code>
       <tr><td>Home first render</td><td>Under 1.2 s warm, under 3 s cold</td><td>Local Chrome, no network</td></tr>
       <tr><td>Brief generation</td><td>Under 2 s without model; under 8 s with local model</td><td>Structured data path</td></tr>
       <tr><td>Email incremental sync</td><td>Under 10 s for 50 new messages</td><td>IMAP fetch plus parse</td></tr>
-      <tr><td>Local draft, 150 words</td><td>Under 12 s on the RTX 3050</td><td>Ollama, 3B–4B Q4</td></tr>
+      <tr><td>Local draft, 150 words</td><td>Under 12 s on the RTX 3050</td><td>Ollama, <code>qwen3.5:2b-q4_K_M</code> (measured ≈2 s for 113 tokens, ≈64 tok/s)</td></tr>
+      <tr><td>Local triage of one thread</td><td>Under 4 s warm</td><td>Ollama, non-thinking, JSON-constrained (measured 1.1 s warm at 69 tok/s)</td></tr>
       <tr><td>Galaxy at 2,000 nodes</td><td>60 fps pan, under 2 s load</td><td>DevTools performance trace</td></tr>
       <tr><td>Approval round trip</td><td>Under 2 s from tap to audit row</td><td>Telegram callback</td></tr>
     </tbody>
@@ -1399,8 +1400,8 @@ WHERE e.to_id = ? AND e.type = 'promised_to' AND m.superseded_by IS NULL;</code>
   <table>
     <thead><tr><th class="tight">Milestone</th><th>Phases</th><th>Outcome</th><th class="tight">Depends on</th></tr></thead>
     <tbody>
-      <tr><td class="tight"><strong>M1</strong><br>Privacy + data</td><td>2E.0 connector foundation<br>2M local model and router<br>2E.1 email read<br>2E.2 calendar read</td><td>Real mail and calendar data, ingested and processed entirely locally, with a visible privacy lane.</td><td class="tight">v0.7.1</td></tr>
-      <tr><td class="tight"><strong>M2</strong><br>Control + contact</td><td>2D Desk<br>2J Telegram channel</td><td>Runs, approvals, audit, and phone control. The owner can see and steer the system.</td><td class="tight">M1</td></tr>
+      <tr><td class="tight"><strong>M1</strong><br>Privacy + data</td><td>2E.0 connector foundation (complete)<br>2M local model and router (complete)<br>2E.1 email read<br>2E.2 calendar read</td><td>Real mail and calendar data, ingested and processed entirely locally, with a visible privacy lane.</td><td class="tight">058c777</td></tr>
+      <tr><td class="tight"><strong>M2</strong><br>Control + contact</td><td>2F.0 approval hardening<br>2D Desk<br>2J Telegram channel</td><td>Runs, approvals, audit, and phone control. The owner can see and steer the system.</td><td class="tight">M1</td></tr>
       <tr><td class="tight"><strong>M3</strong><br>Draft + act</td><td>2F outbox<br>2G actions and grants</td><td>Drafts, approved sends, and scoped automation with a clean audit trail.</td><td class="tight">M2</td></tr>
       <tr><td class="tight"><strong>M4</strong><br>Proactive + tasks</td><td>2H briefs and scheduler<br>2K task ledger and follow-ups</td><td>Morning brief, reminders, waiting-on tracking, and a daily plan that reflects reality.</td><td class="tight">M3</td></tr>
       <tr><td class="tight"><strong>M5</strong><br>Automation</td><td>3D files and apps<br>3E browser tasks<br>3F scripts</td><td>Downloads cleaned, routines run, forms prepared, research gathered — all with approval.</td><td class="tight">M4</td></tr>
@@ -1420,6 +1421,7 @@ WHERE e.to_id = ? AND e.type = 'promised_to' AND m.superseded_by IS NULL;</code>
       <tr><td class="tight">2D</td><td class="tight"><code>phase-2d-desk</code></td><td>Runs, approvals, outbox, connectors, and audit in one surface.</td></tr>
       <tr><td class="tight">2J</td><td class="tight"><code>phase-2j-telegram</code></td><td>Allowlisted bot, commands, briefs, approval buttons, quiet hours, outbound audit.</td></tr>
       <tr><td class="tight">2F</td><td class="tight"><code>phase-2f-outbox</code></td><td>Draft CRUD, hash binding, edit invalidation, send-once semantics.</td></tr>
+      <tr><td class="tight">2F.0</td><td class="tight"><code>phase-2f0-approval-hardening</code></td><td>Payload hash, expiry, single-use nonce, revocation; replay and stale-hash taps rejected and audited. Runs before 2J and before any external write.</td></tr>
       <tr><td class="tight">2G</td><td class="tight"><code>phase-2g-actions-grants</code></td><td>Approved execution, grant model, revocation, and audit completeness.</td></tr>
       <tr><td class="tight">2H</td><td class="tight"><code>phase-2h-briefs</code></td><td>Morning, evening, and weekly briefs; follow-up detection; quiet hours.</td></tr>
       <tr><td class="tight">2K</td><td class="tight"><code>phase-2k-tasks</code></td><td>Ledger, natural-language dates, recurrence, dedupe, reminders, Home integration.</td></tr>
@@ -1441,7 +1443,7 @@ WHERE e.to_id = ? AND e.type = 'promised_to' AND m.superseded_by IS NULL;</code>
   </ul>
 
   <h3>15.4 Critical path</h3>
-  <p>The critical path is <strong>2E.0 → 2M → 2E.1 → 2D → 2J → 2K → 2H</strong>. That sequence produces the daily loop: read mail locally, see approvals, approve from the phone, capture tasks, receive a brief. Everything else improves quality of life around that loop.</p>
+  <p>The critical path is <strong>2E.0 → 2M → 2E.1 → 2F.0 → 2D → 2J → 2K → 2H</strong>. That sequence produces the daily loop: read mail locally, see approvals, approve from the phone, capture tasks, receive a brief. Approval hardening (2F.0) moves ahead of the Telegram channel and the outbox because both depend on a payload-bound, single-use approval. Everything else improves quality of life around that loop.</p>
 </div>
 
 <!-- ================= 16. RISKS ================= -->
@@ -1454,7 +1456,7 @@ WHERE e.to_id = ? AND e.type = 'promised_to' AND m.superseded_by IS NULL;</code>
     <thead><tr><th class="tight">#</th><th>Risk</th><th class="tight">Likelihood</th><th class="tight">Impact</th><th>Mitigation</th></tr></thead>
     <tbody>
       <tr><td class="tight">R1</td><td>Google retires app passwords for this account, breaking IMAP.</td><td class="tight">Medium</td><td class="tight">High</td><td>Connector interface isolates auth; Gmail API OAuth adapter is the fallback; document the seven-day Testing-mode limitation.</td></tr>
-      <tr><td class="tight">R2</td><td>The 3B–4B local model is too weak for useful drafts.</td><td class="tight">Medium</td><td class="tight">Medium</td><td>Deterministic templates, structured outputs, retrieval of past sent mail as style examples, and an easy path to a 7B model with CPU offload.</td></tr>
+      <tr><td class="tight">R2</td><td>The 2B–4B local model is too weak for useful drafts.</td><td class="tight">Medium</td><td class="tight">Medium</td><td>Deterministic templates, structured outputs, retrieval of past sent mail as style examples. Step from 2B to <code>qwen3.5:4b-q4_K_M</code> only if extraction precision on the triage fixture falls below 70% or drafts need heavy edits; 7B with CPU offload is the last resort.</td></tr>
       <tr><td class="tight">R3</td><td>Approval friction causes rubber-stamping or abandonment.</td><td class="tight">High</td><td class="tight">High</td><td>Batch approvals, clear consequence summaries, one-tap from Telegram, and grants only after a workflow proves stable.</td></tr>
       <tr><td class="tight">R4</td><td>Prompt injection through email or web content.</td><td class="tight">Medium</td><td class="tight">High</td><td>Untrusted envelope, deterministic tools, no auto-fetch, no model-selected recipients, approval on every write.</td></tr>
       <tr><td class="tight">R5</td><td>Private content leaks to the cloud through a fallback path.</td><td class="tight">Low</td><td class="tight">Critical</td><td>Lane enforcement in the router, not in prompts; tests that assert refusal; no cloud fallback on local failure.</td></tr>
@@ -1547,7 +1549,7 @@ WHERE e.to_id = ? AND e.type = 'promised_to' AND m.superseded_by IS NULL;</code>
       <tr><td class="tight">D7</td><td>Galaxy as world-model explorer.</td><td>A notes graph would become dead weight; a life graph earns daily use.</td><td class="tight">At M4 review</td></tr>
       <tr><td class="tight">D8</td><td>Windows 11 only.</td><td>Matches the machine and keeps OS automation and packaging honest.</td><td class="tight">Post-v1.0</td></tr>
       <tr><td class="tight">D9</td><td>Local model for private content.</td><td>The privacy boundary includes the model, not just storage.</td><td class="tight">Never without consent</td></tr>
-      <tr><td class="tight">D10</td><td>3B–4B model plus deterministic pipelines.</td><td>Fits 4 GB VRAM; small models are unreliable at multi-step tool use.</td><td class="tight">If draft quality fails</td></tr>
+      <tr><td class="tight">D10</td><td>Qwen 3.5 family, <code>qwen3.5:2b-q4_K_M</code> default (2B–4B band) plus deterministic pipelines.</td><td>Fits 4 GB VRAM with room for context; small models are unreliable at multi-step tool use. Measured on the RTX 3050: Q4 at ~69 tok/s fully resident, versus Q8 at ~30 tok/s with partial CPU offload.</td><td class="tight">If draft quality fails</td></tr>
       <tr><td class="tight">D11</td><td>Reads and local drafts automatic; external writes approved.</td><td>Preserves flow while keeping every irreversible step deliberate.</td><td class="tight">After 30 days of clean audit</td></tr>
       <tr><td class="tight">D12</td><td>No grants at launch.</td><td>Grants are earned by repeated, reliable workflows, not assumed.</td><td class="tight">At M3 exit</td></tr>
       <tr><td class="tight">D13</td><td>Six agent families, core six agents.</td><td>Function-based taxonomy survives app changes; a small roster stays debuggable.</td><td class="tight">Quarterly</td></tr>
@@ -1562,13 +1564,13 @@ WHERE e.to_id = ? AND e.type = 'promised_to' AND m.superseded_by IS NULL;</code>
   <table>
     <thead><tr><th class="tight">#</th><th>Question</th><th>Needed by</th><th>Default if unanswered</th></tr></thead>
     <tbody>
-      <tr><td class="tight">Q1</td><td>Which exact local model — Qwen 2.5 3B, Qwen 2.5 4B, or Llama 3.2 3B?</td><td>Phase 2M</td><td>Benchmark all three on ten real triage tasks; pick the best at equal latency.</td></tr>
+      <tr><td class="tight">Q1</td><td>Which exact local model — <code>qwen3.5:2b-q4_K_M</code>, <code>qwen3.5:2b</code> (Q8), or <code>qwen3.5:4b-q4_K_M</code>?</td><td>Phase 2M</td><td><strong>Answered:</strong> <code>qwen3.5:2b-q4_K_M</code> — 69 tok/s, 1.52 GB fully in VRAM, correct triage JSON in 1.1 s. Q8 kept as the quality fallback; 4B only if precision on the committed ten-thread fixture falls below 70%. Qwen 2.5 3B/4B and Llama 3.2 3B are withdrawn: the Qwen 3.5 family has no 3B variant.</td></tr>
       <tr><td class="tight">Q2</td><td>What are the working hours and quiet hours?</td><td>Phase 2H</td><td>09:00–18:00 working; 21:30–07:00 quiet.</td></tr>
       <tr><td class="tight">Q3</td><td>Which folders may the file operator touch?</td><td>Phase 3D</td><td>Downloads and a staging folder only.</td></tr>
       <tr><td class="tight">Q4</td><td>How long should mail bodies be retained?</td><td>Phase 2E.1</td><td>90 days, with per-thread deletion.</td></tr>
       <tr><td class="tight">Q5</td><td>Should sent mail be read to learn voice?</td><td>Phase 2E.1</td><td>Yes, read-only, never quoted outward.</td></tr>
       <tr><td class="tight">Q6</td><td>Which cloud provider stays configured for non-sensitive work?</td><td>Phase 2M</td><td>Keep the current NVIDIA NIM configuration; make it swappable.</td></tr>
-      <tr><td class="tight">Q7</td><td>Is a 7B model acceptable if 3B drafts disappoint?</td><td>Phase 3I</td><td>Yes, for batch triage only, with CPU offload.</td></tr>
+      <tr><td class="tight">Q7</td><td>Is a 7B model acceptable if 2B drafts disappoint?</td><td>Phase 3I</td><td>Yes, for batch triage only, with CPU offload.</td></tr>
       <tr><td class="tight">Q8</td><td>Should the Galaxy remain 3D or offer a list-first view?</td><td>Phase 2C.2</td><td>Keep 3D, add a list view for accessibility and speed.</td></tr>
     </tbody>
   </table>
@@ -1623,8 +1625,14 @@ WHERE e.to_id = ? AND e.type = 'promised_to' AND m.superseded_by IS NULL;</code>
   <h4>Model and privacy</h4>
   <pre><code>{
   "provider": "ollama",
-  "model": "qwen2.5:3b",
+  "model": "qwen3.5:2b-q4_K_M",
   "api_base": "http://127.0.0.1:11434/v1",
+  "local": {
+    "num_ctx": 8192,
+    "think": false,
+    "format": "json",
+    "timeout_s": 30
+  },
   "cloud": {
     "provider": "nvidia",
     "model": "nvidia/nemotron-3.5-super-vl-120b-a12b",
@@ -1706,7 +1714,7 @@ WHERE e.to_id = ? AND e.type = 'promised_to' AND m.superseded_by IS NULL;</code>
 <div class="section">
   <div class="brandline" style="margin-bottom:18px"><span>Appendix C</span><span>Phase history</span></div>
   <h2 id="appC"><span class="n">C</span>Phase history</h2>
-  <p class="kicker">What already exists at the time of this draft. The baseline is v0.7.1 at commit <code>5b774ac</code>, with 171 tests passing.</p>
+  <p class="kicker">What already exists at the time of this draft. The baseline is v0.8.0 at commit <code>42b491d</code>, with 266 tests passing.</p>
 
   <table>
     <thead><tr><th class="tight">Phase</th><th>Scope</th><th class="tight">State</th></tr></thead>
@@ -1721,19 +1729,22 @@ WHERE e.to_id = ? AND e.type = 'promised_to' AND m.superseded_by IS NULL;</code>
       <tr><td class="tight">2B</td><td>Brain UI: capture, review, search, provenance.</td><td class="tight">Complete</td></tr>
       <tr><td class="tight">2C</td><td>Home hub: Needs You queue, brief region, capture loop.</td><td class="tight">Complete</td></tr>
       <tr><td class="tight">2C.1</td><td>Galaxy load performance: local vendor assets, caching.</td><td class="tight">Complete</td></tr>
-      <tr><td class="tight">2E.0</td><td>Connector foundation.</td><td class="tight">Next</td></tr>
-      <tr><td class="tight">2M</td><td>Local model and privacy router.</td><td class="tight">Planned</td></tr>
+      <tr><td class="tight">2E.0</td><td>Connector foundation: capability contract, registry, health, fixtures, replay.</td><td class="tight">Complete</td></tr>
+      <tr><td class="tight">2UI</td><td>Aurora Rail: shared chrome, Home/Brain/Galaxy redesign, searchable Galaxy, deep links.</td><td class="tight">Complete</td></tr>
+      <tr><td class="tight">2M</td><td>Local model and privacy router: Ollama adapter, lane table, refusal path, lane audit, vault-backed cloud key.</td><td class="tight">Complete</td></tr>
+      <tr><td class="tight">2E.1</td><td>Email read: IMAP sync, thread reconstruction, local classification, proposal queue.</td><td class="tight">Next</td></tr>
     </tbody>
   </table>
 
   <h3>C.1 What this means for the reader</h3>
-  <p>The foundation is not a prototype. Sessions, approvals, audit, memory, agents, and the Home hub already exist and are tested. The work ahead is mostly connective: real data, a privacy router, a control channel, and the task ledger that turns observation into action.</p>
+  <p>The foundation is not a prototype. Sessions, approvals, audit, memory, agents, the Home hub, and the privacy router already exist and are tested. The work ahead is mostly connective: real data, a control channel, and the task ledger that turns observation into action.</p>
 
   <h3>C.2 Immediate next steps</h3>
   <ol>
     <li><strong>Approve the scope.</strong> Confirm Sections 3, 6, and 9. Anything not listed as in scope waits.</li>
-    <li><strong>Open the connector foundation.</strong> Branch <code>phase-2e0-connector-foundation</code>; implement the contract in Section 7.1 with fixtures and tests. No credentials required.</li>
-    <li><strong>Install the local runtime.</strong> Ollama, then benchmark Qwen 2.5 3B, Qwen 2.5 4B, and Llama 3.2 3B on ten real triage tasks; choose on quality at equal latency (Q1).</li>
+    <li><strong>Open the local model and router.</strong> Branch <code>phase-2m-local-model-router</code>; the connector foundation it depends on is complete.</li>
+    <li><strong>Settle the model choice.</strong> Ollama 0.40.16 is installed with <code>qwen3.5:2b</code> (Q8) and <code>qwen3.5:2b-q4_K_M</code>. The Q4 build is the default: 69 tok/s and full 1.52 GB VRAM residency, against 30 tok/s and partial CPU offload for Q8. The adapter must set <code>think:false</code>, JSON-constrained output, and an explicit context size (Q1).</li>
+    <li><strong>Harden approvals before any external write.</strong> Add payload hash, expiry, single-use nonce, and revocation to the approvals table ahead of the Telegram channel (2J).</li>
     <li><strong>Prepare credentials locally.</strong> Gmail app password, calendar iCal address, and Telegram bot token go into Windows Credential Manager through a setup command — never into chat, config, or git.</li>
     <li><strong>Set the daily defaults.</strong> Working hours, quiet hours, reminder time, and the two file roots the operator may touch (Q2, Q3).</li>
   </ol>

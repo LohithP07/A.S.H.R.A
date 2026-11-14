@@ -98,6 +98,12 @@
   function updateStats() {
     $('stat-notes').textContent = String(nodes.length);
     $('stat-links').textContent = String(links.length);
+    const lane = $('rail-lane');
+    if (lane) {
+      const noteLabel = nodes.length === 1 ? 'note' : 'notes';
+      const linkLabel = links.length === 1 ? 'link' : 'links';
+      lane.textContent = `${nodes.length} ${noteLabel} · ${links.length} ${linkLabel}`;
+    }
   }
 
   function rebuildLegend() {
@@ -368,6 +374,8 @@
 
   function initGraph() {
     graph = ForceGraph3D()(stage)
+      .width(stage.clientWidth || window.innerWidth)
+      .height(stage.clientHeight || window.innerHeight)
       .graphData({ nodes, links })
       .nodeId('id')
       .nodeLabel((node) => `${node.label}   ·   ${node.group}`)
@@ -381,7 +389,7 @@
       .linkDirectionalParticleWidth(1.7)
       .linkDirectionalParticleSpeed(0.006)
       .linkDirectionalParticleColor(() => (focusedNode ? colorFor(focusedNode.group) : '#d6e1f2'))
-      .backgroundColor('#010206')
+      .backgroundColor('#07060f')
       .showNavInfo(false)
       .enableNodeDrag(true)
       .onNodeClick((node) => { if (node) focusNode(node); })
@@ -428,12 +436,20 @@
     controls.target.set(0, 0, 0);
     controls.update();
     window.addEventListener('resize', () => {
-      graph.width(window.innerWidth).height(window.innerHeight);
+      graph.width(stage.clientWidth).height(stage.clientHeight);
     });
+    if (window.ResizeObserver) {
+      new ResizeObserver(() => {
+        if (!graph) return;
+        const width = stage.clientWidth;
+        const height = stage.clientHeight;
+        if (width && height) graph.width(width).height(height);
+      }).observe(stage);
+    }
   }
 
   function buildSpace(scene) {
-    scene.background = new THREE.Color('#010206');
+    scene.background = new THREE.Color('#07060f');
 
     const layers = [
       { count: 2200, min: 950, max: 2700, size: 4.6, opacity: 1 },
@@ -2071,6 +2087,7 @@
 
   async function boot() {
     try {
+      if (window.ASHRALane) window.ASHRALane.load();
       initGraph();
       window.requestAnimationFrame(animate);
       window.setTimeout(beginIntro, reduceMotion ? 60 : 180);

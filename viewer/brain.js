@@ -203,6 +203,18 @@
     $('stat-total').textContent = stats.total ?? 0;
     $('stat-proposed').textContent = stats.proposed ?? 0;
     $('stat-links').textContent = stats.links ?? 0;
+
+    const confirmed = (stats.by_status && stats.by_status.confirmed) || 0;
+    const total = stats.total ?? 0;
+    const lane = $('rail-lane');
+    if (lane) {
+      lane.textContent = `${total} ${total === 1 ? 'memory' : 'memories'} · ${stats.links ?? 0} links`;
+    }
+    const track = $('rail-track');
+    if (track) {
+      const share = total ? Math.round((confirmed / total) * 100) : 0;
+      track.style.width = `${Math.max(6, Math.min(100, share))}%`;
+    }
   }
 
   function renderKinds() {
@@ -413,8 +425,23 @@
     resetForget();
     $('detail-body').hidden = true;
     $('detail-empty').hidden = false;
+    closeDetail();
     updateSelectionClasses();
     drawGraph();
+  }
+
+  function openDetail() {
+    const panel = $('detail');
+    if (!panel) return;
+    panel.classList.add('open');
+    panel.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeDetail() {
+    const panel = $('detail');
+    if (!panel) return;
+    panel.classList.remove('open');
+    panel.setAttribute('aria-hidden', 'true');
   }
 
   function renderDetail(data) {
@@ -427,6 +454,7 @@
     body.hidden = false;
     $('detail-empty').hidden = true;
     body.style.setProperty('--kind-color', colorFor(memory.kind));
+    openDetail();
 
     $('detail-kind').textContent = memory.kind;
     $('detail-status').textContent = memory.status;
@@ -733,6 +761,7 @@
   let alpha = 0;
   let raf = null;
   let hoverId = null;
+  let autoFit = true;
 
   const pointer = {
     down: false,
@@ -815,14 +844,39 @@
     if (!raf) raf = window.requestAnimationFrame(graphLoop);
   }
 
+  function fitGraph(padding = 44) {
+    if (!nodes.length) return;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const node of nodes) {
+      minX = Math.min(minX, node.x - node.r);
+      minY = Math.min(minY, node.y - node.r);
+      maxX = Math.max(maxX, node.x + node.r);
+      maxY = Math.max(maxY, node.y + node.r);
+    }
+    const spanX = Math.max(1, maxX - minX);
+    const spanY = Math.max(1, maxY - minY);
+    const fit = Math.min((width - padding * 2) / spanX, (height - padding * 2) / spanY);
+    const k = Math.max(0.42, Math.min(1.1, fit));
+    transform = {
+      k,
+      x: width / 2 - ((minX + maxX) / 2) * k,
+      y: height / 2 - ((maxY + minY) / 2) * k
+    };
+  }
+
   function graphLoop() {
     raf = null;
     if (alpha > 0.004) {
       tickGraph();
       alpha *= 0.985;
+      if (autoFit) fitGraph();
       drawGraph();
       raf = window.requestAnimationFrame(graphLoop);
     } else {
+      if (autoFit) fitGraph();
       drawGraph();
     }
   }
@@ -915,6 +969,16 @@
       ctx.stroke();
     }
 
+    // only the busiest few keep a permanent label; the rest appear on hover,
+    // selection, or when zoomed in far enough to read them
+    const topLabels = new Set(
+      [...nodes]
+        .sort((a, b) => (Number(b.degree) || 0) - (Number(a.degree) || 0))
+        .slice(0, 6)
+        .map((node) => node.id)
+    );
+    const labelNodes = [];
+
     for (const node of nodes) {
       const isSelected = node.id === selected;
       const isHover = node.id === hoverId;
@@ -946,13 +1010,52 @@
         ctx.stroke();
       }
 
-      if (isSelected || isHover || transform.k > 1.05 || node.degree >= 4) {
-        ctx.globalAlpha = dim ? 0.22 : 0.92;
-        ctx.font = `${9 / transform.k}px Inter, ui-sans-serif, sans-serif`;
-        ctx.fillStyle = isSelected ? '#ffffff' : '#c8d4e6';
-        ctx.textAlign = 'center';
-        ctx.fillText(truncate(node.label, 32), node.x, node.y - node.r - 6 / transform.k);
+      if (
+        isSelected ||
+        isHover ||
+        (selected && neighbours.has(node.id)) ||
+        transform.k > 1.25 ||
+        topLabels.has(node.id)
+      ) {
+        labelNodes.push({ node, dim, isSelected });
       }
+    }
+
+    // labels sit above every node so they never disappear behind a sphere
+    const priority = (entry) => (entry.isSelected ? 2 : entry.isHover ? 1 : 0);
+    labelNodes.sort((a, b) => priority(b) - priority(a));
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    const placed = [];
+    for (const entry of labelNodes) {
+      const { node, dim, isSelected } = entry;
+      const size = (isSelected ? 11 : 10) / transform.k;
+      const text = truncate(node.label, isSelected ? 42 : 26);
+      const y = node.y - node.r - 8 / transform.k - size * 0.5;
+
+      ctx.font = `${isSelected ? 500 : 400} ${size}px Inter, ui-sans-serif, sans-serif`;
+      const boxWidth = ctx.measureText(text).width * transform.k + 10;
+      const boxHeight = size * transform.k * 1.6;
+      const boxX = (node.x * transform.k + transform.x) - boxWidth / 2;
+      const boxY = (y * transform.k + transform.y) - boxHeight / 2;
+      const collides = placed.some(
+        (box) =>
+          boxX < box.x + box.w &&
+          box.x < boxX + boxWidth &&
+          boxY < box.y + box.h &&
+          box.y < boxY + boxHeight
+      );
+      if (collides) continue;
+      placed.push({ x: boxX, y: boxY, w: boxWidth, h: boxHeight });
+
+      ctx.globalAlpha = dim ? 0.25 : 1;
+      ctx.strokeStyle = 'rgba(6, 5, 14, 0.82)';
+      ctx.lineWidth = 3.2 / transform.k;
+      ctx.strokeText(text, node.x, y);
+      ctx.fillStyle = isSelected ? '#ffffff' : 'rgba(214, 224, 242, 0.9)';
+      ctx.fillText(text, node.x, y);
     }
 
     ctx.globalAlpha = 1;
@@ -1019,12 +1122,14 @@
     }
 
     if (pointer.mode === 'node' && pointer.node) {
+      autoFit = false;
       pointer.node.x = point.x;
       pointer.node.y = point.y;
       pointer.node.vx = 0;
       pointer.node.vy = 0;
       kickGraph(0.35);
     } else if (pointer.mode === 'pan') {
+      autoFit = false;
       transform.x = pointer.panX + (event.clientX - pointer.panStartX);
       transform.y = pointer.panY + (event.clientY - pointer.panStartY);
       drawGraph();
@@ -1049,6 +1154,7 @@
 
   canvas.addEventListener('wheel', (event) => {
     event.preventDefault();
+    autoFit = false;
     const rect = canvas.getBoundingClientRect();
     const sx = event.clientX - rect.left;
     const sy = event.clientY - rect.top;
@@ -1063,7 +1169,9 @@
   }, { passive: false });
 
   canvas.addEventListener('dblclick', () => {
+    autoFit = true;
     transform = { x: 0, y: 0, k: 1 };
+    fitGraph();
     drawGraph();
   });
 
@@ -1139,6 +1247,7 @@
     $('detail-edit-cancel').addEventListener('click', cancelEdit);
     $('detail-edit').addEventListener('submit', saveEdit);
     $('action-forget').addEventListener('click', forgetSelected);
+    $('detail-close').addEventListener('click', clearSelection);
 
     document.addEventListener('keydown', (event) => {
       const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
@@ -1167,6 +1276,7 @@
   function init() {
     bindEvents();
     resizeCanvas();
+    if (window.ASHRALane) window.ASHRALane.load();
     refresh();
   }
 

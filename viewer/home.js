@@ -15,6 +15,18 @@
     observation: '#94a3b8'
   };
 
+  const KIND_GLYPHS = {
+    fact: '▣',
+    preference: '◆',
+    person: '◍',
+    project: '▤',
+    event: '◇',
+    task: '✓',
+    document: '▥',
+    procedure: '↻',
+    observation: '·'
+  };
+
   const captureText = $('capture-text');
   const captureKind = $('capture-kind');
   const capturePropose = $('capture-propose');
@@ -29,6 +41,11 @@
   const briefDate = $('brief-date');
   const briefStats = $('brief-stats');
   const statusChip = $('status-chip');
+  const heroGreeting = $('hero-greeting');
+  const railLane = $('rail-lane');
+  const railTrack = $('rail-track');
+  const connectorList = $('connector-list');
+  const connectorCount = $('connector-count');
   const toastEl = $('toast');
   const palette = $('palette');
   const paletteInput = $('palette-input');
@@ -104,6 +121,7 @@
     if (!statusChip) return;
     const configured = Boolean(status && status.configured);
     statusChip.classList.toggle('offline', !configured);
+    if (window.ASHRALane) window.ASHRALane.render(status);
     if (!configured) {
       statusChip.textContent = 'Model not configured';
       return;
@@ -116,10 +134,12 @@
   function renderStats(status, stats) {
     if (!briefStats) return;
     briefStats.replaceChildren();
+    const confirmed = Number(stats.confirmed || 0);
+    const proposed = Number(stats.proposed || 0);
     const items = [
       ['notes', Number(status.notes || 0)],
-      ['memories', Number(stats.confirmed || 0)],
-      ['proposals', Number(stats.proposed || 0)],
+      ['memories', confirmed],
+      ['proposals', proposed],
       ['pending', Number(status.approvals || 0)],
       ['threads', Number(status.sessions || 0)]
     ];
@@ -129,6 +149,40 @@
       chip.append(document.createTextNode(label));
       briefStats.append(chip);
     });
+
+    if (railLane) {
+      const plural = confirmed === 1 ? 'memory' : 'memories';
+      const waiting = proposed === 1 ? '1 awaiting review' : `${proposed} awaiting review`;
+      railLane.textContent = `${confirmed} ${plural} · ${waiting}`;
+    }
+    if (railTrack) {
+      const total = confirmed + proposed;
+      const share = total ? Math.round((confirmed / total) * 100) : 6;
+      railTrack.style.width = `${Math.max(6, Math.min(100, share))}%`;
+    }
+  }
+
+  function renderGreeting() {
+    if (!heroGreeting) return;
+    const hour = new Date().getHours();
+    const part = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
+    heroGreeting.replaceChildren(
+      document.createTextNode('Good '),
+      element('em', '', `${part}.`)
+    );
+  }
+
+  function setHeadline(headline) {
+    if (!briefHeadline) return;
+    const text = String(headline || '');
+    const leading = text.match(/^(\d+|One|Two|Three|Four|Five|Nothing)([\s\S]*)$/);
+    briefHeadline.replaceChildren();
+    if (leading) {
+      briefHeadline.append(element('em', '', leading[1]));
+      briefHeadline.append(document.createTextNode(leading[2]));
+    } else {
+      briefHeadline.textContent = text;
+    }
   }
 
   function renderBrief(data) {
@@ -139,7 +193,8 @@
         day: 'numeric'
       });
     }
-    if (briefHeadline) briefHeadline.textContent = data.brief.headline;
+    renderGreeting();
+    setHeadline(data.brief.headline);
     if (briefDetail) briefDetail.textContent = data.brief.detail;
     renderStats(data.status, data.stats);
   }
@@ -307,8 +362,9 @@
     }
     memories.forEach((memory) => {
       const item = element('li', 'memory-row');
-      const dot = element('span', 'memory-dot');
-      dot.style.background = kindColor(memory.kind);
+      const dot = element('span', 'memory-dot', KIND_GLYPHS[memory.kind] || '◆');
+      dot.style.color = kindColor(memory.kind);
+      dot.setAttribute('aria-hidden', 'true');
       const copy = element('div', 'memory-copy');
       copy.append(element('span', 'memory-label', memory.label || memory.content || 'Memory'));
       const meta = element('div', 'memory-meta');
@@ -321,8 +377,13 @@
       confidence.append(fill);
       meta.append(confidence);
       meta.append(element('span', '', `${Math.round(value * 100)}%`));
+      const when = relativeTime(memory.created_at);
+      if (when) {
+        meta.append(element('span', '', '·'));
+        meta.append(element('span', '', when));
+      }
       copy.append(meta);
-      item.append(dot, copy, element('span', 'activity-time', relativeTime(memory.created_at)));
+      item.append(dot, copy);
       memoryList.append(item);
     });
   }
@@ -361,6 +422,47 @@
     });
   }
 
+  function renderConnectors(status) {
+    if (!connectorList) return;
+    const items = Array.isArray(status && status.integrations) ? status.integrations : [];
+    const live = items.filter((item) => item.connected).length;
+
+    if (connectorCount) {
+      connectorCount.textContent = items.length ? `${live} / ${items.length} live` : 'local only';
+      connectorCount.classList.toggle('l', items.length > 0);
+    }
+
+    connectorList.replaceChildren();
+    if (!items.length) {
+      connectorList.append(emptyState('◇', 'No connectors configured. A.S.H.R.A still works entirely on this machine.'));
+      return;
+    }
+
+    items.forEach((item) => {
+      const row = element('div', 'con');
+      const dot = element('span', 's');
+      if (item.connected) {
+        dot.style.background = 'var(--lime)';
+        dot.style.boxShadow = '0 0 8px rgba(182, 243, 106, 0.8)';
+      } else if (item.enabled) {
+        dot.style.background = 'var(--amber)';
+        dot.style.boxShadow = '0 0 8px rgba(255, 200, 97, 0.8)';
+      } else {
+        dot.style.background = 'var(--faint)';
+      }
+      row.append(dot);
+      row.append(element('span', 'nm', item.name || 'connector'));
+      const tools = Number(item.tool_count || 0);
+      row.append(element(
+        'span',
+        'meta',
+        `${tools} ${tools === 1 ? 'tool' : 'tools'} · ${item.permission || 'read'}`
+      ));
+      if (item.error) row.title = String(item.error);
+      connectorList.append(row);
+    });
+  }
+
   function renderAll(data) {
     homeData = data;
     setStatus(data.status);
@@ -369,6 +471,7 @@
     renderThreads(data);
     renderMemories(data);
     renderActivity(data);
+    renderConnectors(data.status);
   }
 
   async function loadHome() {

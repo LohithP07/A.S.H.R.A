@@ -7,114 +7,160 @@
 <meta name="description" content="A.S.H.R.A's command deck: your brief, what needs you, quick capture, and recent threads.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="chrome.css">
 <link rel="stylesheet" href="home.css">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9C%A6%3C/text%3E%3C/svg%3E">
 </head>
 <body>
 
-<div class="aurora" aria-hidden="true"></div>
-<div class="grain" aria-hidden="true"></div>
+<aside class="rail">
+  <div class="rail-in">
+    <a class="brand" href="index.html" aria-label="A.S.H.R.A home">
+      <div class="mark" aria-hidden="true">✦</div>
+      <div class="brand-text">
+        <b>A.S.H.R.A</b>
+        <span>local assistant</span>
+      </div>
+    </a>
 
-<header class="topbar">
-  <a class="brand" href="index.html" aria-label="A.S.H.R.A home">
-    <div class="brand-mark" aria-hidden="true">✦</div>
-    <div class="brand-text">
-      <p class="eyebrow">A.S.H.R.A · Command Deck</p>
-      <h1>Command <em>Deck</em></h1>
+    <nav class="nav" aria-label="Surfaces">
+      <div class="lab">Surfaces</div>
+      <a href="index.html" class="on" aria-current="page"><i aria-hidden="true">◉</i>Home</a>
+      <a href="galaxy.html"><i aria-hidden="true">✦</i>Galaxy</a>
+      <a href="brain.html"><i aria-hidden="true">◆</i>Brain</a>
+      <span class="item disabled"><i aria-hidden="true">▤</i>Desk<span class="soon">SOON</span></span>
+    </nav>
+
+    <div class="rail-card" id="lane-card">
+      <div class="h"><span class="pulse" id="lane-pulse" aria-hidden="true"></span><span id="lane-title">Local lane</span></div>
+      <div class="v" id="lane-copy"><b>Private</b> · nothing leaves the machine</div>
+      <div class="track" aria-hidden="true"><i id="rail-track"></i></div>
+      <div class="f" id="rail-lane">reading memory…</div>
     </div>
-  </a>
 
-  <nav class="surfaces" aria-label="Surfaces">
-    <a href="index.html" class="active" aria-current="page">Home</a>
-    <a href="galaxy.html">Galaxy</a>
-    <a href="brain.html">Brain</a>
-  </nav>
-
-  <div class="top-actions">
-    <div class="status-chip" id="status-chip">connecting…</div>
-    <button class="ghost-btn" id="open-palette" type="button" aria-haspopup="dialog">⌘K</button>
+    <div class="rail-foot">
+      <div class="me">
+        <div class="avatar" aria-hidden="true">L</div>
+        <div><b>Owner</b><span>127.0.0.1</span></div>
+      </div>
+    </div>
   </div>
-</header>
+</aside>
 
-<main class="home-shell">
+<main class="main">
 
-  <section class="panel brief" aria-labelledby="brief-headline">
-    <p class="card-kicker" id="brief-date">Today</p>
-    <h2 id="brief-headline">Loading your day…</h2>
-    <p class="brief-detail" id="brief-detail">Reading the brain, the inbox, and recent threads.</p>
-    <div class="brief-stats" id="brief-stats"></div>
-  </section>
-
-  <section class="panel needs" aria-labelledby="needs-title">
-    <div class="panel-head">
-      <div>
-        <p class="card-kicker">Needs you</p>
-        <h2 id="needs-title">Inbox</h2>
-      </div>
-      <span class="badge zero" id="needs-count">0</span>
+  <div class="top">
+    <div class="top-copy">
+      <p class="date" id="brief-date">Today</p>
+      <h1 class="hero" id="hero-greeting">Good morning.</h1>
     </div>
-    <div class="needs-list" id="needs-list" aria-live="polite"></div>
-  </section>
-
-  <section class="panel capture" aria-labelledby="capture-title">
-    <p class="card-kicker">Quick capture</p>
-    <h2 id="capture-title">Teach the brain</h2>
-    <p class="panel-copy">Propose waits for approval. Remember confirms immediately.</p>
-    <label class="sr-only" for="capture-text">Memory text</label>
-    <textarea id="capture-text" rows="4" maxlength="2000" placeholder="e.g. I prefer dark roast coffee, and we ship on Fridays."></textarea>
-    <div class="capture-controls">
-      <label class="sr-only" for="capture-kind">Memory kind</label>
-      <select id="capture-kind">
-        <option value="fact">Fact</option>
-        <option value="preference">Preference</option>
-        <option value="person">Person</option>
-        <option value="project">Project</option>
-        <option value="event">Event</option>
-        <option value="task">Task</option>
-        <option value="document">Document</option>
-        <option value="procedure">Procedure</option>
-        <option value="observation">Observation</option>
-      </select>
-      <div class="capture-actions">
-        <button class="btn" id="capture-propose" type="button">Propose</button>
-        <button class="btn primary" id="capture-remember" type="button">Remember</button>
-      </div>
+    <div class="top-right">
+      <div class="chip"><span class="d lime" id="lane-dot" aria-hidden="true"></span><span id="lane-chip">Local lane</span></div>
+      <div class="status-chip" id="status-chip">connecting…</div>
+      <button class="key" id="open-palette" type="button" aria-haspopup="dialog">⌘K</button>
     </div>
-  </section>
+  </div>
 
-  <section class="panel threads" aria-labelledby="threads-title">
-    <div class="panel-head">
-      <div>
-        <p class="card-kicker">Threads</p>
-        <h2 id="threads-title">Recent conversations</h2>
-      </div>
-      <a class="text-link" href="galaxy.html">New question →</a>
-    </div>
-    <ul class="thread-list" id="thread-list"></ul>
-  </section>
+  <div class="cols">
 
-  <section class="panel memories" aria-labelledby="memories-title">
-    <div class="panel-head">
-      <div>
-        <p class="card-kicker">Known</p>
-        <h2 id="memories-title">Recently remembered</h2>
-      </div>
-      <a class="text-link" href="brain.html">Open Brain →</a>
-    </div>
-    <ul class="memory-list" id="memory-list"></ul>
-  </section>
+    <div class="stack">
+      <section class="card brief" aria-labelledby="brief-headline">
+        <p class="kick">Today’s brief</p>
+        <h2 id="brief-headline">Loading your day…</h2>
+        <p class="sub" id="brief-detail">Reading the brain, the inbox, and recent threads.</p>
+        <div class="metrics" id="brief-stats"></div>
+      </section>
 
-  <section class="panel activity" aria-labelledby="activity-title">
-    <div class="panel-head">
-      <div>
-        <p class="card-kicker">Activity</p>
-        <h2 id="activity-title">What just happened</h2>
-      </div>
-      <button class="text-link" id="refresh-home" type="button">Refresh</button>
+      <section class="card activity-card" aria-labelledby="activity-title">
+        <div class="head">
+          <div>
+            <p class="kick">Activity</p>
+            <h2 id="activity-title">What just happened</h2>
+          </div>
+          <button class="link" id="refresh-home" type="button">Refresh</button>
+        </div>
+        <ul class="activity-list" id="activity-list"></ul>
+      </section>
     </div>
-    <ul class="activity-list" id="activity-list"></ul>
-  </section>
+
+    <div class="stack">
+      <section class="card needs" aria-labelledby="needs-title">
+        <div class="head">
+          <div>
+            <p class="kick">Needs you</p>
+            <h2 id="needs-title">Inbox</h2>
+          </div>
+          <span class="count zero" id="needs-count">0</span>
+        </div>
+        <div class="needs-list" id="needs-list" aria-live="polite"></div>
+      </section>
+
+      <section class="card connectors-card" aria-labelledby="connectors-title">
+        <div class="head">
+          <div>
+            <p class="kick">Sources</p>
+            <h2 id="connectors-title">Connectors</h2>
+          </div>
+          <span class="pill l" id="connector-count">local only</span>
+        </div>
+        <div id="connector-list"></div>
+        <div class="con-foot">Nothing is written or sent without approval.</div>
+      </section>
+    </div>
+
+  </div>
+
+  <div class="row3">
+
+    <section class="card capture" aria-labelledby="capture-title">
+      <p class="kick">Quick capture</p>
+      <h2 id="capture-title">Teach the brain</h2>
+      <label class="sr-only" for="capture-text">Memory text</label>
+      <textarea id="capture-text" rows="3" maxlength="2000" placeholder="e.g. We ship wholesale orders on Fridays…"></textarea>
+      <div class="cap-row">
+        <label class="sr-only" for="capture-kind">Memory kind</label>
+        <select id="capture-kind">
+          <option value="fact">Fact</option>
+          <option value="preference">Preference</option>
+          <option value="person">Person</option>
+          <option value="project">Project</option>
+          <option value="event">Event</option>
+          <option value="task">Task</option>
+          <option value="document">Document</option>
+          <option value="procedure">Procedure</option>
+          <option value="observation">Observation</option>
+        </select>
+        <div class="cap-actions">
+          <button class="btn" id="capture-propose" type="button">Propose</button>
+          <button class="btn go" id="capture-remember" type="button">Remember</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="memories-title">
+      <div class="head">
+        <div>
+          <p class="kick">Known</p>
+          <h2 id="memories-title">Recently remembered</h2>
+        </div>
+        <a class="link" href="brain.html">Brain →</a>
+      </div>
+      <ul class="memory-list" id="memory-list"></ul>
+    </section>
+
+    <section class="card" aria-labelledby="threads-title">
+      <div class="head">
+        <div>
+          <p class="kick">Threads</p>
+          <h2 id="threads-title">Recent conversations</h2>
+        </div>
+        <a class="link" href="galaxy.html">New →</a>
+      </div>
+      <ul class="thread-list" id="thread-list"></ul>
+    </section>
+
+  </div>
 
 </main>
 
@@ -134,6 +180,7 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
+<script src="chrome.js"></script>
 <script src="home.js"></script>
 </body>
 </html>

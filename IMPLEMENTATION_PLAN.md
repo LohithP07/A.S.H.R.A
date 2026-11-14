@@ -555,7 +555,72 @@ rather than architecture.
 
 ---
 
-## Phase 2 — The Voice (implemented in this pass)
+## Phase 2M — Local model and privacy router (complete)
+
+The privacy boundary as code. Before this phase the app had one provider and a
+privacy vocabulary but no enforcement point; now every model call names a task,
+gets exactly one lane, and records why.
+
+The local lane is `qwen3.5:2b-q4_K_M` on Ollama 0.40.16. Measured on the RTX
+3050 Laptop (4 GB): 69 tok/s fully resident in 1.52 GB VRAM, triage in 1.1 s
+warm. The Q8 build was 30 tok/s with partial CPU offload, so Q4 is the default
+and Q8 stays installed as the quality fallback.
+
+- [x] Add `ashra/ollama.py`: `OllamaProvider` over `/api/chat` with
+  `think: false`, optional `format: "json"`, an explicit `num_ctx` and
+  `num_predict`, and a 30 s default timeout.
+- [x] Add `OllamaProvider.complete_json()` for classification and extraction,
+  with parse failures raised as named provider errors.
+- [x] Implement `ToolCallingProvider` for the local lane so tools work without
+  a cloud model.
+- [x] Add `local_health()`: reports `ok`, `down`, or `model_missing`, and names
+  the model to pull.
+- [x] Add `ashra/router.py`: `LaneRouter`, `Route`, and `TASK_RULES` mirroring
+  PRD 10.5 row for row, with `local`, `cloud`, and `refusal` lanes.
+- [x] Make the router's negative rule explicit: every local task declares no
+  fallback, so private content cannot reach the cloud on failure.
+- [x] Classify the payload — question, retrieved notes, recalled memories — and
+  take the most private class, not the least.
+- [x] Route every chat turn through `LaneRouter`; secret-class content returns a
+  refusal with a manual path and never constructs a provider.
+- [x] Degrade locally: a local failure returns a named limitation and does not
+  touch the cloud. A cloud failure may fall back to local, with a warning.
+- [x] Record lane, task, sensitivity class, model, and status for every model
+  call in `audit_events` (`event = "model"`), satisfying FR-P6.
+- [x] Add a `cloud` block to `config.json` with a `credential_ref`, a `local`
+  block with Ollama options, and a `privacy` block with `default_lane`,
+  `allow_cloud_for`, and `refuse`.
+- [x] Move the NVIDIA key out of `config.json` into Windows Credential Manager
+  as `ashra/cloud`; `AppConfig.for_cloud()` resolves it at call time.
+- [x] Add `GET /health/local` and local/cloud fields in `GET /status`.
+- [x] Add the setup command (`ashra-vault`, or `python -m ashra.credentials`) so
+  secrets are typed at a hidden prompt and never into config or chat.
+- [x] Test the table, the refusal path, local-only enforcement, no-cloud
+  fallback, degraded cloud fallback, JSON mode, and health reporting.
+
+### Phase 2M acceptance criteria
+
+- A private payload makes zero cloud calls; the test suite asserts the provider
+  factory never receives a cloud configuration for it.
+- Secret-class content returns a refusal and constructs no provider at all.
+- A local failure produces a visible limitation, not a cloud request.
+- A missing Ollama server or model is reported by name.
+- `config.json` contains no credential value, only `ashra/cloud`.
+- Ollama receives `think: false` and, for structured tasks, `format: "json"`.
+- The full suite passes with Ollama stopped and no cloud key present.
+
+### Deliberately deferred
+
+- **Approval hardening.** Payload hash, expiry, single-use nonce, and
+  revocation stay in 2F.0, ahead of Telegram and any external write.
+- **The ten-thread triage fixture.** Q1 is settled for latency and output
+  shape; the precision gate needs real or synthetic threads from 2E.1.
+- **Autostart for Ollama.** The health check makes a missing server visible;
+  packaging (3H) decides whether it starts at login.
+
+---
+
+## Phase 2 - The Voice (implemented in this pass)
 
 - [x] Speak every answer with `speechSynthesis`, preferring a British English
       voice (`en-GB`) and falling back to any English voice.

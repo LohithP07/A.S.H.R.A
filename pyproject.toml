@@ -30,6 +30,7 @@ dev = ["pytest>=8.0", "httpx>=0.27", "mcp>=1.0"]
 [project.scripts]
 ashra-server = "server:main"
 ashra-mcp-filesystem = "ashra.mcp_server:main"
+ashra-vault = "ashra.credentials:main"
 
 [tool.setuptools]
 packages = ["ashra", "ashra.agents", "ashra.connectors", "ashra.integrations"]

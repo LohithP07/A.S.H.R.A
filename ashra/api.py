@@ -74,11 +74,13 @@ from .errors import (
 from .integrations import IntegrationManager, load_integrations
 from .memory import MemoryStore
 from .notes import load_notes
+from .ollama import local_health
 from .orchestrator import Orchestrator
 from .remember import append as append_capture
 from .remember import forget as forget_capture
 from .remember import remember as remember_capture
 from .remember import rename as rename_capture
+from .router import LANE_CLOUD, LANE_LOCAL
 from .sessions import SESSION_RE
 from .tools import Permission, ToolRegistry, build_default_registry, parse_permission
 
@@ -244,6 +246,24 @@ def _agent_audit(database: Database):
     return record
 
 
+def _model_audit(database: Database):
+    """Record every lane decision (FR-P6).
+
+    The lane and the payload's sensitivity class are the point: a cloud call
+    must say why it was allowed and what class it carried.
+    """
+
+    def record(payload: dict[str, Any]) -> None:
+        database.record_audit(
+            "model",
+            str(payload.get("lane", "unknown")),
+            status=str(payload.get("status", "ok")),
+            detail=payload,
+        )
+
+    return record
+
+
 def _request_id(request: Request) -> str:
     return str(getattr(request.state, "request_id", "") or "")
 
@@ -270,7 +290,14 @@ def create_app(
     db = database or Database(base / "data" / "ashra.db")
     sessions = SQLiteSessionStore(db)
     memory_store = memory or MemoryStore(db)
-    service = chat or ChatService(base, sessions=sessions, memory=memory_store)
+    credential_vault = vault if vault is not None else get_vault()
+    service = chat or ChatService(
+        base,
+        sessions=sessions,
+        memory=memory_store,
+        audit=_model_audit(db),
+        vault=credential_vault,
+    )
     tools = registry or build_default_registry(
         base,
         audit=_tool_audit(db),
@@ -280,9 +307,21 @@ def create_app(
     agent_registry = agents or AgentRegistry(build_default_agents())
     subagents: SubagentRunner | None = None
     if isinstance(service, ChatService):
+
+        def subagent_provider():
+            # Delegated work inherits private context, so it defaults to the
+            # local lane whenever one is declared.
+            config = load_config(service.config_path)
+            lane = (
+                LANE_LOCAL
+                if (config.local_model or config.provider in {"ollama", "local"})
+                else LANE_CLOUD
+            )
+            return service.provider_for(config, lane)
+
         subagents = SubagentRunner(
             tools,
-            lambda: service.provider_factory(load_config(service.config_path)),
+            subagent_provider,
             audit=_agent_audit(db),
         )
         try:
@@ -303,7 +342,6 @@ def create_app(
     connector_registry = (
         connectors if connectors is not None else ConnectorRegistry(database=db)
     )
-    credential_vault = vault if vault is not None else get_vault()
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -455,6 +493,24 @@ def create_app(
             "time": time.time(),
         }
 
+    @app.get("/health/local")
+    def health_local() -> dict[str, Any]:
+        """Is the local lane usable right now, and if not, why?
+
+        A missing server or model is a limitation the owner should see by name:
+        the app must never answer a private request by quietly going remote.
+        """
+        try:
+            config = load_config(base / "config.json")
+        except ConfigError as exc:
+            return {
+                "status": "unconfigured",
+                "model": "",
+                "models": [],
+                "detail": str(exc),
+            }
+        return local_health(config)
+
     @app.get("/status")
     def status() -> dict[str, Any]:
         config = None
@@ -479,6 +535,9 @@ def create_app(
             "configured": bool(config and config.configured),
             "provider": config.provider if config else None,
             "model": config.model if config else None,
+            "local_model": config.for_local().model if config else None,
+            "local_base": config.for_local().api_base if config else None,
+            "cloud_configured": bool(config and config.cloud_configured),
             "config_error": config_error,
             "notes": note_count,
             "memories": memory_stats["total"],

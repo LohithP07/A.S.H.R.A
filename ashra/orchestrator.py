@@ -24,11 +24,20 @@ from dataclasses import dataclass
 from typing import Any
 
 from .agents.context import tool_context
-from .chat import ChatResult, ChatService, Prepared, _chunks, build_system_prompt
+from .chat import (
+    LOCAL_DOWN_ANSWER,
+    REFUSAL_ANSWER,
+    ChatResult,
+    ChatService,
+    Prepared,
+    _chunks,
+    build_system_prompt,
+)
 from .config import load_config
 from .db import Database
-from .errors import ToolNotFound
+from .errors import ProviderError, ToolNotFound
 from .providers import ToolCall, ToolOutcome, ToolTurn
+from .router import LANE_CLOUD, LANE_LOCAL, LANE_REFUSAL
 from .tools import Permission, ToolRegistry, ToolSpec, parse_permission
 
 MAX_STEPS = 6
@@ -47,6 +56,7 @@ class OrchestratorResult:
     tools: tuple[dict[str, Any], ...] = ()
     pending: dict[str, Any] | None = None
     status: str = "ok"
+    lane: str = ""
     proposal_ids: tuple[str, ...] = ()
 
     def as_dict(self) -> dict[str, Any]:
@@ -60,6 +70,8 @@ class OrchestratorResult:
             "steps": self.steps,
             "tools": list(self.tools),
         }
+        if self.lane:
+            payload["lane"] = self.lane
         if self.pending is not None:
             payload["pending_approval"] = self.pending
         if self.proposal_ids:
@@ -134,15 +146,102 @@ class Orchestrator:
             prepared.config,
             prepared.memories,
         )
-        provider = self.chat.provider_factory(prepared.config)
-        state = self._state(prepared, system, granted)
+        route = self.chat.route_for(prepared)
 
-        if not hasattr(provider, "complete_turn"):
-            # A provider without tool support still answers, just without tools.
-            yield from self._plain(provider, state, system)
+        if route.lane == LANE_REFUSAL:
+            self.chat._record(route, model="", status="refused", detail="secret-class")
+            self.chat.sessions.append_exchange(
+                prepared.session_id, prepared.question, REFUSAL_ANSWER
+            )
+            yield from self.chat._stream_result(
+                ChatResult(
+                    answer=REFUSAL_ANSWER,
+                    nodes=nodes,
+                    sources=sources,
+                    session_id=prepared.session_id,
+                    model="",
+                    proposals=prepared.proposals,
+                    lane=route.lane,
+                    sensitivity=route.sensitivity,
+                    route=route.as_dict(),
+                )
+            )
             return
 
-        yield from self._loop(state, provider, system, request_id)
+        lane_model = (
+            prepared.config.for_local().model
+            if route.lane == LANE_LOCAL
+            else prepared.config.for_cloud(self.chat.vault).model
+        )
+        state = self._state(
+            prepared,
+            system,
+            granted,
+            lane=route.lane,
+            model=lane_model,
+        )
+        provider = self.chat.provider_for(prepared.config, route.lane)
+
+        try:
+            if not hasattr(provider, "complete_turn"):
+                # A provider without tool support still answers, just without tools.
+                yield from self._plain(provider, state, system)
+                return
+            yield from self._loop(state, provider, system, request_id)
+        except ProviderError as exc:
+            self.chat._record(
+                route,
+                model=state["model"],
+                status="error",
+                detail=str(exc),
+            )
+            if (
+                route.lane == LANE_CLOUD
+                and route.fallback == LANE_LOCAL
+                and state["step"] == 1
+                and not state["tool_log"]
+            ):
+                # The cloud died before any tool ran.  Local is the safe
+                # direction for a fallback, so answer there and say so.
+                local_model = prepared.config.for_local().model
+                state["model"] = local_model
+                messages = list(prepared.history) + [
+                    {"role": "user", "content": prepared.question}
+                ]
+                try:
+                    answer = self.chat.provider_for(
+                        prepared.config, LANE_LOCAL
+                    ).complete(system, messages)
+                except ProviderError as local_exc:
+                    yield from self._finish(
+                        state,
+                        LOCAL_DOWN_ANSWER.format(
+                            detail=local_exc,
+                            sensitivity=route.sensitivity,
+                        ),
+                        "degraded",
+                    )
+                    return
+                yield from self._finish(
+                    state,
+                    f"{answer}\n\n_Answered locally: the cloud lane was "
+                    f"unavailable ({exc})._",
+                    "degraded",
+                )
+                return
+
+            if route.lane == LANE_LOCAL:
+                # Never fall back to the cloud for a local lane.
+                yield from self._finish(
+                    state,
+                    LOCAL_DOWN_ANSWER.format(
+                        detail=exc,
+                        sensitivity=route.sensitivity,
+                    ),
+                    "degraded",
+                )
+                return
+            raise
 
     def ask(
         self,
@@ -231,7 +330,8 @@ class Orchestrator:
             raise ValueError("That approval no longer matches a pending tool call.")
 
         config = load_config(self.chat.config_path)
-        provider = self.chat.provider_factory(config)
+        lane = str(state.get("lane") or LANE_LOCAL)
+        provider = self.chat.provider_for(config, lane)
 
         yield {
             "event": "start",
@@ -280,6 +380,9 @@ class Orchestrator:
         prepared: Prepared,
         system: str,
         granted: Permission,
+        *,
+        lane: str = LANE_LOCAL,
+        model: str = "",
     ) -> dict[str, Any]:
         messages: list[dict[str, Any]] = list(prepared.history) + [
             {"role": "user", "content": prepared.question}
@@ -287,7 +390,8 @@ class Orchestrator:
         return {
             "question": prepared.question,
             "session_id": prepared.session_id,
-            "model": prepared.config.model,
+            "model": model or prepared.config.model,
+            "lane": lane,
             "nodes": [item.note.id for item in prepared.matches],
             "sources": self.chat._sources(prepared.matches, prepared.memories),
             "messages": messages,
@@ -350,6 +454,7 @@ class Orchestrator:
             "question": str(payload.get("question") or ""),
             "session_id": str(payload.get("session_id") or ""),
             "model": str(payload.get("model") or ""),
+            "lane": str(payload.get("lane") or LANE_LOCAL),
             "nodes": list(payload.get("nodes") or []),
             "sources": list(payload.get("sources") or []),
             "messages": list(payload.get("messages") or []),
@@ -378,6 +483,7 @@ class Orchestrator:
             "question": state["question"],
             "session_id": state["session_id"],
             "model": state["model"],
+            "lane": state.get("lane", LANE_LOCAL),
             "nodes": state["nodes"],
             "sources": state["sources"],
             "messages": state["messages"],
@@ -647,6 +753,7 @@ class Orchestrator:
             "sources": state["sources"],
             "session_id": state["session_id"],
             "model": state["model"],
+            "lane": state.get("lane", ""),
             "steps": state["step"],
             "tools": list(state["tool_log"]),
             "memories_proposed": [
@@ -672,6 +779,7 @@ class Orchestrator:
             tools=tuple(done.get("tools") or ()),
             pending=done.get("pending_approval"),
             status=str(done.get("status") or "ok"),
+            lane=str(done.get("lane") or ""),
             proposal_ids=tuple(done.get("memories_proposed") or ()),
         )
 

@@ -66,5 +66,92 @@ class ConfigTests(unittest.TestCase):
         self.assertFalse(config.configured)
 
 
+class LaneConfigTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.path = Path(self.tmp.name) / "config.json"
+
+    def write(self, value: object) -> None:
+        self.path.write_text(json.dumps(value), encoding="utf-8")
+
+    def test_local_lane_needs_no_key(self) -> None:
+        self.write(
+            {
+                "provider": "ollama",
+                "model": "qwen3.5:2b-q4_K_M",
+                "local": {"model": "qwen3.5:2b-q4_K_M", "num_ctx": 4096},
+            }
+        )
+        config = load_config(self.path)
+        self.assertTrue(config.configured)
+        self.assertEqual(config.for_local().provider, "ollama")
+        self.assertEqual(config.for_local().api_key, "")
+        self.assertEqual(config.for_local().local_num_ctx, 4096)
+
+    def test_cloud_block_is_parsed_and_resolved_from_the_vault(self) -> None:
+        self.write(
+            {
+                "provider": "ollama",
+                "model": "qwen3.5:2b-q4_K_M",
+                "cloud": {
+                    "provider": "nvidia",
+                    "model": "cloud-model",
+                    "api_base": "https://example.invalid/v1",
+                    "credential_ref": "ashra/cloud",
+                },
+                "privacy": {
+                    "default_lane": "local",
+                    "allow_cloud_for": ["public"],
+                    "refuse": ["secret", "sensitive"],
+                },
+            }
+        )
+        config = load_config(self.path)
+
+        self.assertTrue(config.cloud_configured)
+        self.assertEqual(config.privacy_allow_cloud, ("public",))
+        self.assertEqual(config.privacy_refuse, ("secret", "sensitive"))
+
+        from ashra.credentials import MemoryVault
+
+        cloud = config.for_cloud(MemoryVault({"ashra/cloud": "secret-value"}))
+        self.assertEqual(cloud.provider, "nvidia")
+        self.assertEqual(cloud.model, "cloud-model")
+        self.assertEqual(cloud.api_key, "secret-value")
+
+    def test_missing_vault_entry_leaves_cloud_unconfigured(self) -> None:
+        self.write(
+            {
+                "provider": "ollama",
+                "model": "local-model",
+                "cloud": {
+                    "provider": "nvidia",
+                    "model": "cloud-model",
+                    "credential_ref": "ashra/cloud",
+                },
+            }
+        )
+        config = load_config(self.path)
+        self.assertTrue(config.cloud_configured)
+
+        from ashra.credentials import MemoryVault
+
+        cloud = config.for_cloud(MemoryVault())
+        self.assertFalse(cloud.api_key.strip())
+        # The snapshot consumed the reference, so it cannot claim a key it
+        # does not have.
+        self.assertEqual(cloud.credential_ref, "")
+        self.assertEqual(cloud.cloud_credential_ref, "")
+        self.assertFalse(cloud.configured)
+
+    def test_defaults_keep_private_content_local(self) -> None:
+        self.write({"provider": "ollama", "model": "local-model"})
+        config = load_config(self.path)
+        self.assertEqual(config.privacy_default_lane, "local")
+        self.assertEqual(config.privacy_allow_cloud, ("public", "internal"))
+        self.assertEqual(config.privacy_refuse, ("secret",))
+
+
 if __name__ == "__main__":
     unittest.main()

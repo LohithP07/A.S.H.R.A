@@ -28,20 +28,42 @@ The core API uses FastAPI and Uvicorn. The optional MCP filesystem server uses t
 
 ## Configuration
 
-The LLM provider is configured in `config.json`:
+Two lanes are configured in `config.json`: a **local** lane that never leaves the machine, and an optional **cloud** lane for public or internal work. The privacy router picks between them per task, and keeps private content local.
 
 ```json
 {
-  "provider": "openai_compatible",
-  "model": "YOUR_MODEL_ID",
-  "api_key": "YOUR_API_KEY",
-  "api_base": "https://your-provider.example/v1"
+  "provider": "ollama",
+  "model": "qwen3.5:2b-q4_K_M",
+  "local": {
+    "model": "qwen3.5:2b-q4_K_M",
+    "api_base": "http://127.0.0.1:11434",
+    "num_ctx": 8192,
+    "think": false,
+    "timeout_s": 30
+  },
+  "cloud": {
+    "provider": "nvidia",
+    "model": "nvidia/nemotron-3.5-super-vl-120b-a12b",
+    "credential_ref": "ashra/cloud"
+  },
+  "privacy": {
+    "default_lane": "local",
+    "allow_cloud_for": ["public", "internal"],
+    "refuse": ["secret"]
+  }
 }
 ```
 
-Supported provider values are `anthropic`, `nvidia`, and `openai_compatible`. Use `openai_compatible` for providers that expose an OpenAI-style `/chat/completions` endpoint.
+Supported provider values are `ollama`, `anthropic`, `nvidia`, and `openai_compatible`. The local lane needs Ollama running on `127.0.0.1:11434` with the configured model pulled; `GET /health/local` reports `ok`, `down`, or `model_missing`.
 
-Copy `config.example.json` to `config.json` and fill in your key. Never commit secrets - `.gitignore` already skips it. The server re-reads `config.json` on every request, so key and model changes do not require a restart.
+No key belongs in `config.json`. Store one in Windows Credential Manager instead:
+
+```bash
+python -m ashra.credentials set ashra/cloud   # prompts without echoing
+python -m ashra.credentials check ashra/cloud
+```
+
+The server re-reads `config.json` on every request, so model and lane changes do not require a restart. `.gitignore` skips the file; never commit a secret.
 
 ## Running the app
 

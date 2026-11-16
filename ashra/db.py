@@ -24,7 +24,7 @@ from typing import Any
 
 from .sessions import SESSION_RE
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 DEFAULT_TTL_SECONDS = 6 * 60 * 60
 DEFAULT_APPROVAL_TTL_SECONDS = 15 * 60
 DEFAULT_MAX_MESSAGES = 8
@@ -203,6 +203,77 @@ class Database:
 
                     CREATE INDEX IF NOT EXISTS idx_sources_connector
                         ON sources(connector_id, occurred_at DESC);
+
+                    -- Schema v5.  Email is cached locally, encrypted with the
+                    -- cipher in ashra.crypto; the row keeps only a hash and a
+                    -- size so retention can be enforced without decrypting.
+                    CREATE TABLE IF NOT EXISTS connector_cursors (
+                        connector_id TEXT NOT NULL,
+                        folder TEXT NOT NULL,
+                        uidvalidity INTEGER,
+                        uid INTEGER NOT NULL DEFAULT 0,
+                        updated_at REAL NOT NULL,
+                        PRIMARY KEY (connector_id, folder)
+                    );
+
+                    CREATE TABLE IF NOT EXISTS mail_messages (
+                        id TEXT PRIMARY KEY,
+                        source_id TEXT NOT NULL,
+                        connector_id TEXT NOT NULL,
+                        external_id TEXT NOT NULL,
+                        thread_id TEXT,
+                        folder TEXT,
+                        uid INTEGER,
+                        from_addr TEXT,
+                        to_addrs TEXT,
+                        subject TEXT,
+                        occurred_at REAL,
+                        body_cipher BLOB NOT NULL,
+                        body_hash TEXT NOT NULL,
+                        body_chars INTEGER NOT NULL DEFAULT 0,
+                        attachments TEXT,
+                        attachment_count INTEGER NOT NULL DEFAULT 0,
+                        sensitivity TEXT NOT NULL DEFAULT 'private',
+                        cached_at REAL NOT NULL,
+                        purged_at REAL
+                    );
+
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_mail_identity
+                        ON mail_messages(connector_id, external_id);
+
+                    CREATE INDEX IF NOT EXISTS idx_mail_thread
+                        ON mail_messages(thread_id, occurred_at DESC);
+
+                    CREATE INDEX IF NOT EXISTS idx_mail_cached
+                        ON mail_messages(cached_at);
+
+                    -- A proposal is a structured suggestion that is not yet a
+                    -- task or a memory.  Email creates these; the owner decides.
+                    CREATE TABLE IF NOT EXISTS proposals (
+                        id TEXT PRIMARY KEY,
+                        created_at REAL NOT NULL,
+                        updated_at REAL NOT NULL,
+                        kind TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        detail TEXT NOT NULL DEFAULT '',
+                        person TEXT,
+                        due_at REAL,
+                        confidence REAL NOT NULL DEFAULT 0.5,
+                        sensitivity TEXT NOT NULL DEFAULT 'private',
+                        status TEXT NOT NULL DEFAULT 'proposed',
+                        source_id TEXT,
+                        connector_id TEXT,
+                        origin TEXT NOT NULL DEFAULT 'manual',
+                        fingerprint TEXT,
+                        decided_at REAL
+                    );
+
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_proposals_fingerprint
+                        ON proposals(fingerprint)
+                        WHERE fingerprint IS NOT NULL;
+
+                    CREATE INDEX IF NOT EXISTS idx_proposals_status
+                        ON proposals(status, created_at DESC);
                     """
                 )
                 # FTS5 is optional: some Python builds ship SQLite without it.
@@ -887,6 +958,503 @@ class Database:
                 ).fetchone()
             else:
                 row = connection.execute("SELECT COUNT(*) AS n FROM sources").fetchone()
+        return int(row["n"] if row else 0)
+
+    # ------------------------------------------------------------------
+    # connector cursors (Phase 2E.1)
+    # ------------------------------------------------------------------
+    def get_cursor(self, connector_id: str, folder: str) -> dict[str, Any] | None:
+        """Return the stored UID cursor for one folder, if any."""
+        self.initialize()
+        with self._lock, self._connect() as connection:
+            row = connection.execute(
+                "SELECT uidvalidity, uid, updated_at FROM connector_cursors "
+                "WHERE connector_id = ? AND folder = ?",
+                (str(connector_id), str(folder)),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "uidvalidity": row["uidvalidity"],
+            "uid": int(row["uid"] or 0),
+            "updated_at": row["updated_at"],
+        }
+
+    def set_cursor(
+        self,
+        connector_id: str,
+        folder: str,
+        *,
+        uidvalidity: int | None,
+        uid: int,
+    ) -> None:
+        """Commit a folder cursor.
+
+        Committing after a folder finishes is what makes a sync resumable: a
+        crash re-reads at most the folder in flight, and re-reading is safe
+        because sources are idempotent by external id (PRD 14.2).
+        """
+        self.initialize()
+        now = time.time()
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO connector_cursors
+                    (connector_id, folder, uidvalidity, uid, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(connector_id, folder) DO UPDATE SET
+                    uidvalidity = excluded.uidvalidity,
+                    uid = excluded.uid,
+                    updated_at = excluded.updated_at
+                """,
+                (str(connector_id), str(folder), uidvalidity, int(uid), now),
+            )
+
+    # ------------------------------------------------------------------
+    # cached mail
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _mail_dict(row: sqlite3.Row, *, with_body: bool = False) -> dict[str, Any]:
+        def decode(value: Any, fallback: Any) -> Any:
+            if not value:
+                return fallback
+            try:
+                return json.loads(value)
+            except (TypeError, ValueError):
+                return fallback
+
+        payload = {
+            "id": row["id"],
+            "source_id": row["source_id"],
+            "connector_id": row["connector_id"],
+            "external_id": row["external_id"],
+            "thread_id": row["thread_id"],
+            "folder": row["folder"],
+            "uid": row["uid"],
+            "from_addr": row["from_addr"],
+            "to_addrs": decode(row["to_addrs"], []),
+            "subject": row["subject"],
+            "occurred_at": row["occurred_at"],
+            "body_hash": row["body_hash"],
+            "body_chars": row["body_chars"],
+            "attachments": decode(row["attachments"], []),
+            "attachment_count": row["attachment_count"],
+            "sensitivity": row["sensitivity"],
+            "cached_at": row["cached_at"],
+            "purged_at": row["purged_at"],
+        }
+        if with_body:
+            payload["body_cipher"] = row["body_cipher"]
+        return payload
+
+    def store_mail_message(
+        self,
+        *,
+        source_id: str,
+        connector_id: str,
+        external_id: str,
+        body_cipher: bytes,
+        body_hash: str,
+        thread_id: str | None = None,
+        folder: str | None = None,
+        uid: int | None = None,
+        from_addr: str | None = None,
+        to_addrs: Any = None,
+        subject: str | None = None,
+        occurred_at: float | None = None,
+        body_chars: int = 0,
+        attachments: Any = None,
+        sensitivity: str = "private",
+    ) -> tuple[str, bool]:
+        """Insert or update one cached message.
+
+        Identity is ``(connector_id, external_id)``, so a re-sync after a crash
+        overwrites the same row rather than growing the cache.
+        """
+        self.initialize()
+        now = time.time()
+        attachments_json = (
+            json.dumps(attachments, ensure_ascii=False, default=str) if attachments else None
+        )
+        to_json = json.dumps(to_addrs or [], ensure_ascii=False, default=str)
+        with self._lock, self._connect() as connection:
+            existing = connection.execute(
+                "SELECT id FROM mail_messages WHERE connector_id = ? AND external_id = ?",
+                (str(connector_id), str(external_id)),
+            ).fetchone()
+            if existing is not None:
+                message_id = str(existing["id"])
+                connection.execute(
+                    """
+                    UPDATE mail_messages SET
+                        source_id = ?,
+                        thread_id = COALESCE(?, thread_id),
+                        folder = COALESCE(?, folder),
+                        uid = COALESCE(?, uid),
+                        from_addr = COALESCE(?, from_addr),
+                        to_addrs = ?,
+                        subject = COALESCE(?, subject),
+                        occurred_at = COALESCE(?, occurred_at),
+                        body_cipher = ?,
+                        body_hash = ?,
+                        body_chars = ?,
+                        attachments = COALESCE(?, attachments),
+                        attachment_count = ?,
+                        sensitivity = ?,
+                        cached_at = ?,
+                        purged_at = NULL
+                    WHERE id = ?
+                    """,
+                    (
+                        str(source_id),
+                        thread_id,
+                        folder,
+                        uid,
+                        from_addr,
+                        to_json,
+                        subject,
+                        occurred_at,
+                        sqlite3.Binary(bytes(body_cipher)),
+                        str(body_hash),
+                        int(body_chars),
+                        attachments_json,
+                        len(attachments or []),
+                        str(sensitivity),
+                        now,
+                        message_id,
+                    ),
+                )
+                return message_id, False
+
+            message_id = f"msg_{uuid.uuid4().hex[:24]}"
+            connection.execute(
+                """
+                INSERT INTO mail_messages
+                    (id, source_id, connector_id, external_id, thread_id, folder,
+                     uid, from_addr, to_addrs, subject, occurred_at, body_cipher,
+                     body_hash, body_chars, attachments, attachment_count,
+                     sensitivity, cached_at, purged_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+                """,
+                (
+                    message_id,
+                    str(source_id),
+                    str(connector_id),
+                    str(external_id),
+                    thread_id,
+                    folder,
+                    uid,
+                    from_addr,
+                    to_json,
+                    subject,
+                    occurred_at,
+                    sqlite3.Binary(bytes(body_cipher)),
+                    str(body_hash),
+                    int(body_chars),
+                    attachments_json,
+                    len(attachments or []),
+                    str(sensitivity),
+                    now,
+                ),
+            )
+            return message_id, True
+
+    def get_mail_message(self, message_id: str, *, with_body: bool = True) -> dict[str, Any] | None:
+        self.initialize()
+        with self._lock, self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM mail_messages WHERE id = ?",
+                (str(message_id),),
+            ).fetchone()
+        return self._mail_dict(row, with_body=with_body) if row else None
+
+    def find_mail_message(self, external_id: str) -> dict[str, Any] | None:
+        self.initialize()
+        with self._lock, self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM mail_messages WHERE external_id = ?",
+                (str(external_id),),
+            ).fetchone()
+        return self._mail_dict(row, with_body=True) if row else None
+
+    def list_mail_messages(
+        self,
+        *,
+        connector_id: str | None = None,
+        thread_id: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        self.initialize()
+        limit = max(1, min(500, int(limit)))
+        clauses: list[str] = []
+        values: list[Any] = []
+        if connector_id:
+            clauses.append("connector_id = ?")
+            values.append(str(connector_id))
+        if thread_id:
+            clauses.append("thread_id = ?")
+            values.append(str(thread_id))
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        values.append(limit)
+        with self._lock, self._connect() as connection:
+            rows = connection.execute(
+                f"SELECT * FROM mail_messages {where} "
+                "ORDER BY COALESCE(occurred_at, cached_at) DESC LIMIT ?",
+                tuple(values),
+            ).fetchall()
+        return [self._mail_dict(row) for row in rows]
+
+    def list_mail_threads(
+        self,
+        *,
+        connector_id: str | None = "gmail",
+        limit: int = 30,
+    ) -> list[dict[str, Any]]:
+        """Group cached mail by thread, newest first."""
+        self.initialize()
+        limit = max(1, min(200, int(limit)))
+        clause = "WHERE connector_id = ?" if connector_id else ""
+        values: tuple[Any, ...] = (str(connector_id), limit) if connector_id else (limit,)
+        with self._lock, self._connect() as connection:
+            try:
+                rows = connection.execute(
+                    f"""
+                    SELECT thread_id,
+                           COUNT(*) AS messages,
+                           MAX(COALESCE(occurred_at, cached_at)) AS last_at,
+                           MIN(COALESCE(occurred_at, cached_at)) AS first_at,
+                           MAX(subject) AS subject,
+                           MAX(sensitivity) AS sensitivity
+                    FROM mail_messages
+                    {clause}
+                    GROUP BY COALESCE(thread_id, external_id)
+                    ORDER BY last_at DESC
+                    LIMIT ?
+                    """,
+                    values,
+                ).fetchall()
+            except sqlite3.OperationalError:  # pragma: no cover - defensive
+                return []
+        return [
+            {
+                "thread_id": row["thread_id"],
+                "messages": int(row["messages"] or 0),
+                "last_at": row["last_at"],
+                "first_at": row["first_at"],
+                "subject": row["subject"],
+                "sensitivity": row["sensitivity"] or "private",
+            }
+            for row in rows
+        ]
+
+    def purge_mail(self, *, older_than: float | None = None) -> int:
+        """Delete cached messages, or only those cached before ``older_than``.
+
+        FR-P7 requires a purge that completes inside a minute.  A delete is the
+        whole operation: the ciphertext is the row.
+        """
+        self.initialize()
+        with self._lock, self._connect() as connection:
+            if older_than is None:
+                cursor = connection.execute("DELETE FROM mail_messages")
+            else:
+                cursor = connection.execute(
+                    "DELETE FROM mail_messages WHERE cached_at < ?",
+                    (float(older_than),),
+                )
+            return int(cursor.rowcount or 0)
+
+    def mail_stats(self) -> dict[str, Any]:
+        self.initialize()
+        with self._lock, self._connect() as connection:
+            messages = connection.execute(
+                "SELECT COUNT(*) AS n, COALESCE(SUM(attachment_count), 0) AS a "
+                "FROM mail_messages"
+            ).fetchone()
+            threads = connection.execute(
+                "SELECT COUNT(DISTINCT COALESCE(thread_id, external_id)) AS n "
+                "FROM mail_messages"
+            ).fetchone()
+            sources = connection.execute(
+                "SELECT COUNT(*) AS n FROM sources WHERE connector_id = 'gmail'"
+            ).fetchone()
+            latest = connection.execute(
+                "SELECT MAX(COALESCE(occurred_at, cached_at)) AS at FROM mail_messages"
+            ).fetchone()
+        return {
+            "messages": int(messages["n"] if messages else 0),
+            "attachments": int(messages["a"] if messages else 0),
+            "threads": int(threads["n"] if threads else 0),
+            "sources": int(sources["n"] if sources else 0),
+            "last_at": latest["at"] if latest else None,
+        }
+
+    # ------------------------------------------------------------------
+    # proposals (Phase 2E.1)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _proposal_dict(row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "id": row["id"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+            "kind": row["kind"],
+            "title": row["title"],
+            "detail": row["detail"],
+            "person": row["person"],
+            "due_at": row["due_at"],
+            "confidence": row["confidence"],
+            "sensitivity": row["sensitivity"],
+            "status": row["status"],
+            "source_id": row["source_id"],
+            "connector_id": row["connector_id"],
+            "origin": row["origin"],
+            "decided_at": row["decided_at"],
+        }
+
+    def upsert_proposal(
+        self,
+        *,
+        kind: str,
+        title: str,
+        detail: str = "",
+        person: str | None = None,
+        due_at: float | None = None,
+        confidence: float = 0.5,
+        sensitivity: str = "private",
+        source_id: str | None = None,
+        connector_id: str | None = None,
+        origin: str = "manual",
+        fingerprint: str | None = None,
+    ) -> tuple[str, bool]:
+        """Insert a proposal, or refresh an identical open one.
+
+        A decided proposal (confirmed or rejected) is never resurrected by a
+        later sync: the owner's decision outlives the mailbox.
+        """
+        self.initialize()
+        now = time.time()
+        with self._lock, self._connect() as connection:
+            if fingerprint:
+                existing = connection.execute(
+                    "SELECT * FROM proposals WHERE fingerprint = ?",
+                    (str(fingerprint),),
+                ).fetchone()
+                if existing is not None:
+                    proposal_id = str(existing["id"])
+                    if existing["status"] == "proposed":
+                        connection.execute(
+                            """
+                            UPDATE proposals SET
+                                title = ?, detail = ?, person = COALESCE(?, person),
+                                due_at = COALESCE(?, due_at), confidence = ?,
+                                sensitivity = ?, source_id = COALESCE(?, source_id),
+                                updated_at = ?
+                            WHERE id = ?
+                            """,
+                            (
+                                str(title),
+                                str(detail),
+                                person,
+                                due_at,
+                                float(confidence),
+                                str(sensitivity),
+                                source_id,
+                                now,
+                                proposal_id,
+                            ),
+                        )
+                    return proposal_id, False
+
+            proposal_id = f"prop_{uuid.uuid4().hex[:24]}"
+            connection.execute(
+                """
+                INSERT INTO proposals
+                    (id, created_at, updated_at, kind, title, detail, person,
+                     due_at, confidence, sensitivity, status, source_id,
+                     connector_id, origin, fingerprint, decided_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', ?, ?, ?, ?, NULL)
+                """,
+                (
+                    proposal_id,
+                    now,
+                    now,
+                    str(kind),
+                    str(title)[:400],
+                    str(detail or "")[:2000],
+                    person,
+                    due_at,
+                    float(confidence),
+                    str(sensitivity),
+                    source_id,
+                    connector_id,
+                    str(origin),
+                    fingerprint,
+                ),
+            )
+            return proposal_id, True
+
+    def get_proposal(self, proposal_id: str) -> dict[str, Any] | None:
+        self.initialize()
+        with self._lock, self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM proposals WHERE id = ?",
+                (str(proposal_id),),
+            ).fetchone()
+        return self._proposal_dict(row) if row else None
+
+    def list_proposals(
+        self,
+        *,
+        status: str | None = "proposed",
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        self.initialize()
+        limit = max(1, min(500, int(limit)))
+        with self._lock, self._connect() as connection:
+            if status:
+                rows = connection.execute(
+                    "SELECT * FROM proposals WHERE status = ? "
+                    "ORDER BY confidence DESC, created_at DESC LIMIT ?",
+                    (str(status), limit),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    "SELECT * FROM proposals ORDER BY created_at DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+        return [self._proposal_dict(row) for row in rows]
+
+    def decide_proposal(self, proposal_id: str, *, status: str) -> dict[str, Any] | None:
+        """Move a proposal to ``confirmed`` or ``rejected``, once."""
+        if status not in {"confirmed", "rejected"}:
+            raise ValueError("A proposal decision must be 'confirmed' or 'rejected'.")
+        self.initialize()
+        now = time.time()
+        with self._lock, self._connect() as connection:
+            cursor = connection.execute(
+                "UPDATE proposals SET status = ?, decided_at = ?, updated_at = ? "
+                "WHERE id = ? AND status = 'proposed'",
+                (str(status), now, now, str(proposal_id)),
+            )
+            if not cursor.rowcount:
+                return self.get_proposal(proposal_id)
+            row = connection.execute(
+                "SELECT * FROM proposals WHERE id = ?",
+                (str(proposal_id),),
+            ).fetchone()
+        return self._proposal_dict(row) if row else None
+
+    def count_proposals(self, status: str | None = "proposed") -> int:
+        self.initialize()
+        with self._lock, self._connect() as connection:
+            if status:
+                row = connection.execute(
+                    "SELECT COUNT(*) AS n FROM proposals WHERE status = ?",
+                    (str(status),),
+                ).fetchone()
+            else:
+                row = connection.execute("SELECT COUNT(*) AS n FROM proposals").fetchone()
         return int(row["n"] if row else 0)
 
 

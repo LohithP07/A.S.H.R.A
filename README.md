@@ -99,6 +99,15 @@ Open a browser to http://127.0.0.1:4700/ for Home, http://127.0.0.1:4700/galaxy.
 | `/integrations/{name}` | GET | - | Status for one MCP integration |
 | `/connectors` | GET | - | Declared external connectors, their capabilities, health, and credential readiness (names only) |
 | `/connectors/{id}` | GET | - | One connector declaration and its last-known health |
+| `/connectors/{id}/sync` | POST | `{ "force": false }` | Poll a read-only connector. `409` for configuration or a missing credential, `502` for a mailbox failure |
+| `/connectors/{id}/sources` | GET | `?limit=50` | Records already ingested from one connector |
+| `/mail/threads` | GET | `?limit=30` | Cached mail grouped by thread, newest first, plus the mailbox status |
+| `/mail/messages/{id}` | GET | - | One cached message, decrypted locally, with its untrusted-content envelope and injection scan |
+| `/proposals` | GET | `?status=proposed&limit=50` | Mail (and later task) proposals with counts per status |
+| `/proposals/{id}` | GET | - | One proposal |
+| `/proposals/{id}/confirm` | POST | - | Accept a proposal; a decision is terminal |
+| `/proposals/{id}/reject` | POST | - | Reject a proposal; a decision is terminal |
+| `/cache/purge` | POST | - | Enforce the mail retention window now |
 | `/approvals` | GET | `?status=pending&limit=50` | Pending and recent approval requests |
 | `/approvals/{id}` | POST | `{ "approve": true }` | Approve or deny a pending tool call and resume the answer |
 | `/audit` | GET | `?limit=50&event=chat` | Recent audit events |
@@ -229,14 +238,16 @@ The MCP SDK is optional. Install it with:
 python -m pip install "mcp>=1.0"
 ```
 
-### Connectors (read-only foundation)
+### Connectors (read-only)
 
-Phase 2E.0 adds the contract every external adapter implements. There is no Gmail or calendar adapter yet; the point of this phase is that adding one cannot widen its own authority.
+Phase 2E.0 adds the contract every external adapter implements. Phase 2E.1 adds
+the first real adapter, Gmail over IMAP. The point of the contract is that an
+adapter cannot widen its own authority.
 
 ```python
 from ashra.connectors import Connector, PollResult, Record, Source, NormalisedRecord
 
-class GmailConnector(Connector):
+class ExampleConnector(Connector):
     def __init__(self, vault):
         super().__init__(
             connector_id="gmail",
@@ -264,7 +275,69 @@ The rules the registry enforces:
 - **Proposals, not writes.** `normalise()` returns candidate tasks and memories. They are returned to the caller for confirmation; nothing enters the task ledger or memory store directly.
 - **Credential references, not values.** `GET /connectors` reports whether `ashra/gmail` resolves. The vault is Windows Credential Manager on Windows and an in-memory vault elsewhere, which is deliberately not persistent.
 
-Schema v4 adds `connectors` and `sources`, and migrates the old three-value memory sensitivity vocabulary (`normal`, `private`, `sensitive`) to the PRD's five classes (`normal` becomes `internal`). `ReplayConnector` feeds fixture records through the same path, so the whole loop is testable without a mailbox or a key.
+Schema v5 adds `connector_cursors`, `mail_messages`, and `proposals`, and keeps
+the v4 `connectors` and `sources` tables. `ReplayConnector` feeds fixture
+records through the same path, so the whole loop is testable without a mailbox
+or a key.
+
+### Email (Gmail over IMAP, read-only)
+
+Add the connector to `config.json`. There is no secret in this block; the app
+password lives in Windows Credential Manager under `ashra/gmail`.
+
+```json
+"connectors": {
+  "gmail": {
+    "enabled": true,
+    "mode": "read",
+    "credential_ref": "ashra/gmail",
+    "username": "owner@example.com",
+    "folders": ["INBOX", "[Gmail]/Sent Mail"],
+    "retention_days": 90,
+    "max_per_poll": 50,
+    "classify_with_model": true
+  }
+}
+```
+
+Store the app password once, at a hidden prompt (Google requires an app password
+when 2-Step Verification is on):
+
+```bash
+python -m ashra.credentials set ashra/gmail
+python server.py
+# then, from the Home surface or:
+curl -X POST http://127.0.0.1:4700/connectors/gmail/sync -H "Content-Type: application/json" -d "{\"force\": true}"
+```
+
+What a sync does, in order:
+
+1. Opens TLS to `imap.gmail.com`, selects each folder with `readonly=True`, and
+   searches from the stored `(UIDVALIDITY, UID)` cursor.
+2. Fetches with `BODY.PEEK[]`, so no message is marked read. `STORE`,
+   `APPEND`, `COPY`, `MOVE`, `EXPUNGE`, and `DELETE` are never issued.
+3. Parses, removes quoted history and signatures, reconstructs the thread from
+   `References` / `In-Reply-To`, and reduces attachments to metadata only.
+4. Classifies with rules first; only ambiguous messages reach the local model,
+   capped at ten per sync. Secret-class content never reaches a model.
+5. Wraps the body in an untrusted-content envelope and scans it for injection
+   patterns before anything could act on it.
+6. Caches the body encrypted with DPAPI (`ashra/crypto.py`), stores a hash and a
+   size for retention, and creates proposals for requests.
+7. Records one audit event per sync with counts and whether the cache was
+   encrypted. No body and no secret is ever logged.
+
+Home shows mail proposals in **Needs you** with *Add task* and *Ignore*. A
+**Recent threads** card lists the newest cached threads, and **Sync** runs an
+incremental poll in place, reporting what was fetched, cached, and proposed. The
+**Connectors** card lists Gmail as live with its cached message count, without
+exposing the address or the credential. A decision is terminal: a later sync
+refreshes an open proposal instead of duplicating it and never resurrects a
+rejected one.
+
+Retention is enforced by `POST /cache/purge` and defaults to 90 days. On a
+non-Windows machine the cache is stored with a visible `plain` marker and
+`/status` says `encrypted_at_rest: false` rather than pretending.
 
 ### MCP filesystem server
 
@@ -339,8 +412,13 @@ To add a new note category:
 - `ashra/api.py` - FastAPI routes, SSE streaming, request IDs, and error mapping.
 - `ashra/chat.py` - `ChatService.ask()` and `ChatService.stream()` share retrieval and provider logic.
 - `ashra/orchestrator.py` - bounded tool-calling loop and approval continuation.
-- `ashra/db.py` - SQLite sessions, messages, memories, approvals, and audit events.
+- `ashra/db.py` - SQLite sessions, messages, memories, approvals, connectors, mail cache, proposals, and audit events.
 - `ashra/memory.py` - typed memory store, lifecycle, retrieval, graph, ingestion, and health.
+- `ashra/connectors/` - the adapter contract, registry, replay fixture, connector config, and the read-only Gmail adapter.
+- `ashra/mail.py` - the email pipeline: sync, encrypted cache, classification budget, and proposals.
+- `ashra/mailparse.py` - RFC 822 parsing, quoted-text cleaning, threading, classification, and ask extraction.
+- `ashra/untrusted.py` - the untrusted-content envelope and deterministic injection scan.
+- `ashra/crypto.py` - DPAPI encryption at rest (with a visibly unencrypted fallback).
 - `ashra/tools.py` - permission tiers, tool registry, scoped filesystem tools, and the memory tool pack.
 - `ashra/agents/` - specialist registry, permission ceiling, bounded child runner, and `spawn_agent`.
 - `ashra/integrations/` - MCP client, integration config, and tool registration.

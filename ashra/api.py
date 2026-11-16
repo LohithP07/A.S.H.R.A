@@ -64,6 +64,7 @@ from .errors import (
     ConfigError,
     ConnectorError,
     ConnectorNotFound,
+    CredentialError,
     NotConfiguredError,
     PermissionDenied,
     ProviderError,
@@ -72,6 +73,7 @@ from .errors import (
     ToolNotFound,
 )
 from .integrations import IntegrationManager, load_integrations
+from .mail import MailService
 from .memory import MemoryStore
 from .notes import load_notes
 from .ollama import local_health
@@ -84,7 +86,7 @@ from .router import LANE_CLOUD, LANE_LOCAL
 from .sessions import SESSION_RE
 from .tools import Permission, ToolRegistry, build_default_registry, parse_permission
 
-VERSION = "0.8.0"
+VERSION = "0.9.0"
 MAX_BODY_BYTES = 64 * 1024
 BLOCKED_NAMES = {"config.json", ".env", ".git"}
 
@@ -131,6 +133,10 @@ class ToolInvokeRequest(BaseModel):
 
 class ApprovalDecision(BaseModel):
     approve: bool = False
+
+
+class MailSyncRequest(BaseModel):
+    force: bool = False
 
 
 class MemoryCreate(BaseModel):
@@ -283,6 +289,7 @@ def create_app(
     memory: MemoryStore | None = None,
     connectors: ConnectorRegistry | None = None,
     vault: CredentialVault | None = None,
+    mail: MailService | None = None,
     viewer_dir: Path | None = None,
 ) -> FastAPI:
     base = Path(base_dir or Path(__file__).resolve().parent.parent)
@@ -342,6 +349,7 @@ def create_app(
     connector_registry = (
         connectors if connectors is not None else ConnectorRegistry(database=db)
     )
+    mailbox = mail or MailService(base, db, credential_vault)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -376,6 +384,7 @@ def create_app(
     app.state.memory = memory_store
     app.state.connectors = connector_registry
     app.state.vault = credential_vault
+    app.state.mailbox = mailbox
 
     # Compress large static assets and JSON.  Event streams are excluded by
     # Starlette's default content-type filter, so SSE still flushes per token.
@@ -528,6 +537,16 @@ def create_app(
             pass
 
         memory_stats = memory_store.stats()
+        try:
+            mail_status = mailbox.status()
+        except ConfigError as exc:
+            mail_status = {
+                "connector": "gmail",
+                "enabled": False,
+                "configured": False,
+                "error": str(exc),
+                "limitations": [str(exc)],
+            }
         return {
             "status": "ok",
             "name": "A.S.H.R.A",
@@ -542,12 +561,14 @@ def create_app(
             "notes": note_count,
             "memories": memory_stats["total"],
             "memory_proposals": memory_stats["proposed"],
+            "proposals": db.count_proposals(),
             "sessions": db.count_sessions(),
             "messages": db.count_messages(),
             "approvals": db.count_approvals(),
             "tools": len(tools.list(Permission.ADMIN)),
             "agents": len(agent_registry),
             "connectors": len(connector_registry),
+            "mail": mail_status,
             "integrations": (
                 integration_manager.status() if integration_manager is not None else []
             ),
@@ -562,10 +583,14 @@ def create_app(
         stats = memory_store.stats()
         proposals = memory_store.list(status="proposed", limit=12)
         approvals = db.list_approvals(status="pending", limit=12)
-        needs = len(proposals) + len(approvals)
+        mail_proposals = db.list_proposals(status="proposed", limit=12)
+        needs = len(proposals) + len(approvals) + len(mail_proposals)
 
         if needs:
             parts: list[str] = []
+            if mail_proposals:
+                label = "mail proposal" if len(mail_proposals) == 1 else "mail proposals"
+                parts.append(f"{len(mail_proposals)} {label}")
             if proposals:
                 label = "memory proposal" if len(proposals) == 1 else "memory proposals"
                 parts.append(f"{len(proposals)} {label}")
@@ -598,12 +623,14 @@ def create_app(
             },
             "needs_you": {
                 "memories": proposals,
+                "proposals": mail_proposals,
                 "approvals": approvals,
                 "count": needs,
             },
             "recent": {
                 "memories": memory_store.timeline(status="confirmed", limit=8),
                 "sessions": db.recent_sessions(limit=8),
+                "mail": db.list_mail_threads(connector_id="gmail", limit=6),
                 "audit": [
                     {key: value for key, value in event.items() if key != "detail"}
                     for event in db.list_audit(limit=10)
@@ -1165,6 +1192,129 @@ def create_app(
         if connector is None:
             return _error(404, "not_found", "No such connector.")
         return {"connector": connector.status()}
+
+    # ------------------------------------------------------------------
+    # email (Phase 2E.1)
+    # ------------------------------------------------------------------
+    @app.post("/connectors/{connector_id}/sync")
+    def sync_connector(
+        connector_id: str,
+        request_body: MailSyncRequest,
+        request: Request,
+    ) -> Any:
+        """Poll one read-only connector and return proposals.
+
+        A misconfiguration is the owner's to fix, so it is a 409 with the exact
+        next action rather than a 500.  A provider or network failure is a 502
+        and never a reason to retry automatically.
+        """
+        if connector_id != "gmail":
+            return _error(
+                404,
+                "not_found",
+                "Only the read-only Gmail connector can sync in this phase.",
+            )
+        request_id = _request_id(request)
+        try:
+            result = mailbox.sync(force=request_body.force)
+        except ConfigError as exc:
+            db.record_audit(
+                "mail", "sync", status="error", request_id=request_id,
+                detail={"error": "config", "message": str(exc)[:300]},
+            )
+            return _error(409, "mail_not_configured", str(exc))
+        except CredentialError as exc:
+            db.record_audit(
+                "mail", "sync", status="error", request_id=request_id,
+                detail={"error": "credential", "message": str(exc)[:300]},
+            )
+            return _error(409, "credential_missing", str(exc))
+        except RateLimited as exc:
+            return _error(429, "rate_limited", str(exc))
+        except ConnectorError as exc:
+            db.record_audit(
+                "mail", "sync", status="error", request_id=request_id,
+                detail={"error": "connector", "message": str(exc)[:300]},
+            )
+            return _error(502, "connector_error", str(exc))
+        return {"ok": True, "session_id": None, **result}
+
+    @app.get("/connectors/{connector_id}/sources")
+    def list_connector_sources(connector_id: str, limit: int = 50) -> Any:
+        if connector_registry.find(connector_id) is None:
+            return _error(404, "not_found", "No such connector.")
+        return {
+            "connector": connector_id,
+            "sources": db.list_sources(connector_id=connector_id, limit=limit),
+        }
+
+    @app.get("/mail/threads")
+    def list_mail_threads(limit: int = 30) -> dict[str, Any]:
+        return {
+            "threads": mailbox.threads(limit=limit),
+            "mailbox": mailbox.status(),
+        }
+
+    @app.get("/mail/messages/{message_id}")
+    def get_mail_message(message_id: str) -> Any:
+        try:
+            return mailbox.message(message_id)
+        except KeyError:
+            return _error(404, "not_found", "No such cached message.")
+        except ConfigError as exc:
+            # The ciphertext belongs to another user or machine; say so plainly
+            # instead of returning a 500 or nonsense.
+            return _error(409, "cache_not_readable", str(exc))
+
+    @app.get("/proposals")
+    def list_proposals(status: str | None = "proposed", limit: int = 50) -> dict[str, Any]:
+        return {
+            "proposals": mailbox.proposals(status=status, limit=limit),
+            "counts": {
+                "proposed": db.count_proposals("proposed"),
+                "confirmed": db.count_proposals("confirmed"),
+                "rejected": db.count_proposals("rejected"),
+            },
+        }
+
+    @app.get("/proposals/{proposal_id}")
+    def get_proposal(proposal_id: str) -> Any:
+        row = db.get_proposal(proposal_id)
+        if row is None:
+            return _error(404, "not_found", "No such proposal.")
+        return {"proposal": row}
+
+    def _decide_proposal(proposal_id: str, status: str, request: Request) -> Any:
+        row = db.get_proposal(proposal_id)
+        if row is None:
+            return _error(404, "not_found", "No such proposal.")
+        updated = db.decide_proposal(proposal_id, status=status)
+        db.record_audit(
+            "mail",
+            f"proposal_{'confirm' if status == 'confirmed' else 'reject'}",
+            request_id=_request_id(request),
+            detail={
+                "proposal_id": proposal_id,
+                "kind": row.get("kind"),
+                "source_id": row.get("source_id"),
+            },
+        )
+        return {"proposal": updated}
+
+    @app.post("/proposals/{proposal_id}/confirm")
+    def confirm_proposal(proposal_id: str, request: Request) -> Any:
+        return _decide_proposal(proposal_id, "confirmed", request)
+
+    @app.post("/proposals/{proposal_id}/reject")
+    def reject_proposal(proposal_id: str, request: Request) -> Any:
+        return _decide_proposal(proposal_id, "rejected", request)
+
+    @app.post("/cache/purge")
+    def purge_cache(request: Request) -> dict[str, Any]:
+        """Enforce the retention window now (FR-P7)."""
+        result = mailbox.purge()
+        result["request_id"] = _request_id(request)
+        return result
 
     @app.get("/approvals")
     def list_approvals(status: str | None = None, limit: int = 50) -> dict[str, Any]:

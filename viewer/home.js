@@ -49,6 +49,10 @@
   const railTrack = $('rail-track');
   const connectorList = $('connector-list');
   const connectorCount = $('connector-count');
+  const mailList = $('mail-list');
+  const mailCount = $('mail-count');
+  const mailFoot = $('mail-foot');
+  const syncMailButton = $('sync-mail');
   const toastEl = $('toast');
   const palette = $('palette');
   const paletteInput = $('palette-input');
@@ -237,11 +241,38 @@
     return `Memory proposal · ${String(kind || 'fact')}`;
   }
 
+  function dueLabel(timestamp) {
+    if (!timestamp) return '';
+    try {
+      return new Date(Number(timestamp) * 1000).toLocaleDateString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch (error) {
+      return '';
+    }
+  }
+
+  function proposalKicker(item) {
+    const label = String(item.kind || 'task');
+    return `Mail proposal · ${label}`;
+  }
+
+  function proposalText(item) {
+    const parts = [String(item.title || 'Proposal')];
+    if (item.person) parts.push(`from ${item.person}`);
+    const due = dueLabel(item.due_at);
+    if (due) parts.push(`due ${due}`);
+    return parts.join(' · ');
+  }
+
   function renderNeeds(data) {
     if (!needsList) return;
     const proposals = Array.isArray(data.needs_you.memories) ? data.needs_you.memories : [];
+    const mailProposals = Array.isArray(data.needs_you.proposals) ? data.needs_you.proposals : [];
     const approvals = Array.isArray(data.needs_you.approvals) ? data.needs_you.approvals : [];
-    const total = proposals.length + approvals.length;
+    const total = proposals.length + mailProposals.length + approvals.length;
 
     if (needsCount) {
       needsCount.textContent = String(total);
@@ -253,6 +284,33 @@
       needsList.append(emptyState('✓', 'Inbox zero. Nothing needs your approval right now.'));
       return;
     }
+
+    mailProposals.forEach((item) => {
+      const card = element('article', 'need proposal');
+      const kicker = element('p', 'need-kicker');
+      const dot = element('span', 'need-dot');
+      dot.style.background = kindColor(item.kind);
+      kicker.append(dot, document.createTextNode(proposalKicker(item)));
+      card.append(kicker);
+      card.append(element('p', 'need-text', proposalText(item)));
+      if (item.detail && item.detail !== item.title) {
+        card.append(element('p', 'need-detail', String(item.detail)));
+      }
+      const actions = element('div', 'need-actions');
+      const confirm = element('button', 'btn approve', 'Add task');
+      confirm.type = 'button';
+      confirm.dataset.kind = 'proposal';
+      confirm.dataset.id = item.id;
+      confirm.dataset.action = 'confirm';
+      const reject = element('button', 'btn deny', 'Ignore');
+      reject.type = 'button';
+      reject.dataset.kind = 'proposal';
+      reject.dataset.id = item.id;
+      reject.dataset.action = 'reject';
+      actions.append(confirm, reject);
+      card.append(actions);
+      needsList.append(card);
+    });
 
     proposals.forEach((item) => {
       const card = element('article', 'need');
@@ -335,6 +393,11 @@
           method: 'POST'
         });
         showToast(action === 'confirm' ? 'Memory confirmed.' : 'Proposal rejected.');
+      } else if (kind === 'proposal') {
+        await api(`/proposals/${encodeURIComponent(id)}/${encodeURIComponent(action)}`, {
+          method: 'POST'
+        });
+        showToast(action === 'confirm' ? 'Task accepted.' : 'Proposal ignored.');
       } else {
         const result = await api(`/approvals/${encodeURIComponent(id)}`, {
           method: 'POST',
@@ -383,6 +446,43 @@
       });
       item.append(button);
       threadList.append(item);
+    });
+  }
+
+  function renderMail(data) {
+    if (!mailList) return;
+    const threads = Array.isArray(data.recent.mail) ? data.recent.mail : [];
+    if (mailCount) {
+      mailCount.textContent = String(threads.length);
+      mailCount.classList.toggle('l', threads.length > 0);
+    }
+    if (mailFoot) {
+      const mail = data.status && data.status.mail ? data.status.mail : null;
+      if (mail && mail.enabled === false) {
+        mailFoot.textContent = 'Connect Gmail to read mail here.';
+      } else if (mail && mail.encrypted_at_rest === false) {
+        mailFoot.textContent = 'Read-only. Body encryption is unavailable on this machine.';
+      } else {
+        mailFoot.textContent = 'Read-only. Bodies are encrypted at rest.';
+      }
+    }
+    mailList.replaceChildren();
+    if (!threads.length) {
+      mailList.append(emptyState('◇', 'No mail cached yet. Use Sync to read the inbox.'));
+      return;
+    }
+    threads.forEach((thread) => {
+      const item = element('li');
+      const row = element('div', 'thread');
+      const main = element('span', 'thread-main');
+      main.append(element('span', 'thread-question', thread.subject || '(no subject)'));
+      const count = Number(thread.messages || 0);
+      const meta = element('span', 'thread-meta',
+        `${count} ${count === 1 ? 'message' : 'messages'} · ${thread.sensitivity || 'private'}`);
+      main.append(meta);
+      row.append(main, element('span', 'thread-time', relativeTime(thread.last_at)));
+      item.append(row);
+      mailList.append(item);
     });
   }
 
@@ -458,7 +558,21 @@
 
   function renderConnectors(status) {
     if (!connectorList) return;
-    const items = Array.isArray(status && status.integrations) ? status.integrations : [];
+    const items = Array.isArray(status && status.integrations) ? status.integrations.slice() : [];
+    const mail = status && status.mail ? status.mail : null;
+    if (mail && mail.enabled) {
+      const messages = mail.stats && Number(mail.stats.messages) ? Number(mail.stats.messages) : 0;
+      items.push({
+        name: 'Gmail · IMAP',
+        enabled: true,
+        connected: Boolean(mail.credential_ready) && !mail.last_error,
+        permission: mail.mode || 'read',
+        note: mail.last_error
+          ? String(mail.last_error)
+          : `${messages} ${messages === 1 ? 'message' : 'messages'}`,
+        error: mail.last_error || ''
+      });
+    }
     const live = items.filter((item) => item.connected).length;
 
     if (connectorCount) {
@@ -490,7 +604,7 @@
       row.append(element(
         'span',
         'meta',
-        `${tools} ${tools === 1 ? 'tool' : 'tools'} · ${item.permission || 'read'}`
+        item.note || `${tools} ${tools === 1 ? 'tool' : 'tools'} · ${item.permission || 'read'}`
       ));
       if (item.error) row.title = String(item.error);
       connectorList.append(row);
@@ -504,6 +618,7 @@
     renderBrief(data);
     renderNeeds(data);
     renderThreads(data);
+    renderMail(data);
     renderMemories(data);
     renderActivity(data);
     renderConnectors(data.status);
@@ -517,6 +632,31 @@
       if (briefHeadline) briefHeadline.textContent = 'I cannot reach the server.';
       if (briefDetail) briefDetail.textContent = error.message || 'Check that python server.py is running.';
       showToast(error.message || 'Home could not load.', true);
+    }
+  }
+
+  async function syncMail() {
+    if (!syncMailButton) return;
+    const label = syncMailButton.textContent;
+    syncMailButton.disabled = true;
+    syncMailButton.textContent = 'Syncing…';
+    try {
+      const result = await api('/connectors/gmail/sync', {
+        method: 'POST',
+        body: JSON.stringify({ force: true })
+      });
+      const proposals = Number(result.proposals_created || 0);
+      showToast(
+        `Mail sync: ${Number(result.fetched || 0)} fetched, `
+        + `${Number(result.cached || 0)} cached, `
+        + `${proposals} new ${proposals === 1 ? 'proposal' : 'proposals'}.`
+      );
+      await loadHome();
+    } catch (error) {
+      showToast(error.message || 'Mail sync failed.', true);
+    } finally {
+      syncMailButton.disabled = false;
+      syncMailButton.textContent = label;
     }
   }
 
@@ -764,6 +904,8 @@
 
   const refreshButton = $('refresh-home');
   if (refreshButton) refreshButton.addEventListener('click', loadHome);
+
+  if (syncMailButton) syncMailButton.addEventListener('click', syncMail);
 
   const openPaletteButton = $('open-palette');
   if (openPaletteButton) openPaletteButton.addEventListener('click', openPalette);

@@ -25,5 +25,17 @@
   "max_tokens": 2048,
   "temperature": 0.2,
   "note_chars": 4000,
+  "connectors": {
+    "gmail": {
+      "enabled": false,
+      "mode": "read",
+      "credential_ref": "ashra/gmail",
+      "username": "owner@example.com",
+      "folders": ["INBOX", "[Gmail]/Sent Mail"],
+      "retention_days": 90,
+      "max_per_poll": 50,
+      "classify_with_model": true
+    }
+  },
   "integrations": []
 }

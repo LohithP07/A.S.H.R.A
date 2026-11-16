@@ -299,6 +299,18 @@ class ChatService:
             default_lane=prepared.config.privacy_default_lane,
         )
         route = router.decide(task, prepared.sensitivity)
+        if route.lane == LANE_CLOUD and prepared.config.chat_model == "local":
+            # The owner picked the local model.  Public content may still be
+            # private in spirit, so the pick beats the router's cloud default;
+            # a secret-class refusal is untouched because it is not a cloud
+            # decision to begin with.
+            return Route(
+                lane=LANE_LOCAL,
+                task=route.task,
+                sensitivity=route.sensitivity,
+                reason="the local model is selected, so this turn stays on this machine.",
+                fallback=None,
+            )
         if route.lane == LANE_CLOUD and not self.cloud_ready(prepared.config):
             # An unconfigured cloud lane is not a lane.  Staying local keeps the
             # audit honest and avoids a failed request on every turn.  A

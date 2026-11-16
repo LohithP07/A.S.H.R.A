@@ -57,7 +57,10 @@
     </div>
     <div class="top-right">
       <div class="chip"><span class="d lime" id="lane-dot" aria-hidden="true"></span><span id="lane-chip">Local lane</span></div>
-      <div class="status-chip" id="status-chip">connecting…</div>
+      <div class="model-picker" id="model-picker">
+        <button class="status-chip" id="status-chip" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="model-menu" title="Choose the model A.S.H.R.A answers with">connecting…</button>
+        <div class="model-menu" id="model-menu" role="listbox" aria-label="Answer model" hidden></div>
+      </div>
       <button class="key" id="open-palette" type="button" aria-haspopup="dialog">⌘K</button>
     </div>
   </div>

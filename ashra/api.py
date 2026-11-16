@@ -54,7 +54,7 @@ from .agents import (
     tool_context,
 )
 from .chat import ChatService
-from .config import load_config
+from .config import CHAT_MODELS, load_config
 from .connectors import ConnectorRegistry
 from .credentials import CredentialVault, get_vault
 from .db import Database, SQLiteSessionStore
@@ -75,6 +75,7 @@ from .errors import (
 from .integrations import IntegrationManager, load_integrations
 from .mail import MailService
 from .memory import MemoryStore
+from .models import catalog, find, selected, write_selection
 from .notes import load_notes
 from .ollama import local_health
 from .orchestrator import Orchestrator
@@ -137,6 +138,10 @@ class ApprovalDecision(BaseModel):
 
 class MailSyncRequest(BaseModel):
     force: bool = False
+
+
+class ModelSelectRequest(BaseModel):
+    model: str = ""
 
 
 class MemoryCreate(BaseModel):
@@ -557,6 +562,12 @@ def create_app(
             "local_model": config.for_local().model if config else None,
             "local_base": config.for_local().api_base if config else None,
             "cloud_configured": bool(config and config.cloud_configured),
+            "chat_model": selected(config) if config else None,
+            "models": (
+                [option.as_dict() for option in catalog(config, credential_vault)]
+                if config
+                else []
+            ),
             "config_error": config_error,
             "notes": note_count,
             "memories": memory_stats["total"],
@@ -574,6 +585,65 @@ def create_app(
             ),
             "database": str(db.path),
             "viewer": str(viewer),
+        }
+
+    # ------------------------------------------------------------------
+    # model picker
+    # ------------------------------------------------------------------
+    @app.get("/models")
+    def models() -> Any:
+        """The two answer models and which one is selected."""
+        try:
+            config = load_config(base / "config.json")
+        except ConfigError as exc:
+            return _error(503, "config_error", str(exc))
+        options = catalog(config, credential_vault)
+        return {
+            "selected": selected(config),
+            "models": [option.as_dict() for option in options],
+        }
+
+    @app.post("/models/select")
+    def select_model(request_body: ModelSelectRequest) -> Any:
+        """Persist the owner's choice in ``chat.model`` and report the result.
+
+        A model that cannot answer is refused with 409 rather than written, so
+        the picker can never leave the app pointed at an unusable lane.
+        """
+        try:
+            config = load_config(base / "config.json")
+        except ConfigError as exc:
+            return _error(503, "config_error", str(exc))
+
+        choice = str(request_body.model or "").strip().lower()
+        if choice not in CHAT_MODELS:
+            return _error(
+                400,
+                "invalid_model",
+                "Choose one of: " + ", ".join(CHAT_MODELS) + ".",
+            )
+
+        options = catalog(config, credential_vault)
+        option = find(options, choice)
+        if option is None or not option.available:
+            return _error(
+                409,
+                "model_unavailable",
+                option.detail if option is not None else "That model is not configured.",
+            )
+
+        try:
+            chosen = write_selection(base / "config.json", choice)
+        except (ConfigError, ValueError) as exc:
+            return _error(500, "config_write_failed", str(exc))
+
+        db.record_audit("model", "select", detail={"model": chosen})
+        fresh = load_config(base / "config.json")
+        return {
+            "selected": selected(fresh),
+            "models": [
+                item.as_dict() for item in catalog(fresh, credential_vault)
+            ],
         }
 
     @app.get("/home")
@@ -667,6 +737,8 @@ def create_app(
                     "sources": plain.sources,
                     "session_id": plain.session_id,
                     "model": plain.model,
+                    "lane": plain.lane,
+                    "sensitivity": plain.sensitivity,
                     "memories_proposed": [
                         item.get("id") for item in plain.proposals
                     ],

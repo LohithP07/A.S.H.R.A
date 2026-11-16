@@ -49,6 +49,10 @@
   const railTrack = $('rail-track');
   const connectorList = $('connector-list');
   const connectorCount = $('connector-count');
+  const mailList = $('mail-list');
+  const mailCount = $('mail-count');
+  const mailFoot = $('mail-foot');
+  const syncMailButton = $('sync-mail');
   const toastEl = $('toast');
   const palette = $('palette');
   const paletteInput = $('palette-input');
@@ -445,6 +449,43 @@
     });
   }
 
+  function renderMail(data) {
+    if (!mailList) return;
+    const threads = Array.isArray(data.recent.mail) ? data.recent.mail : [];
+    if (mailCount) {
+      mailCount.textContent = String(threads.length);
+      mailCount.classList.toggle('l', threads.length > 0);
+    }
+    if (mailFoot) {
+      const mail = data.status && data.status.mail ? data.status.mail : null;
+      if (mail && mail.enabled === false) {
+        mailFoot.textContent = 'Connect Gmail to read mail here.';
+      } else if (mail && mail.encrypted_at_rest === false) {
+        mailFoot.textContent = 'Read-only. Body encryption is unavailable on this machine.';
+      } else {
+        mailFoot.textContent = 'Read-only. Bodies are encrypted at rest.';
+      }
+    }
+    mailList.replaceChildren();
+    if (!threads.length) {
+      mailList.append(emptyState('◇', 'No mail cached yet. Use Sync to read the inbox.'));
+      return;
+    }
+    threads.forEach((thread) => {
+      const item = element('li');
+      const row = element('div', 'thread');
+      const main = element('span', 'thread-main');
+      main.append(element('span', 'thread-question', thread.subject || '(no subject)'));
+      const count = Number(thread.messages || 0);
+      const meta = element('span', 'thread-meta',
+        `${count} ${count === 1 ? 'message' : 'messages'} · ${thread.sensitivity || 'private'}`);
+      main.append(meta);
+      row.append(main, element('span', 'thread-time', relativeTime(thread.last_at)));
+      item.append(row);
+      mailList.append(item);
+    });
+  }
+
   function renderMemories(data) {
     if (!memoryList) return;
     const memories = Array.isArray(data.recent.memories) ? data.recent.memories : [];
@@ -563,6 +604,7 @@
     renderBrief(data);
     renderNeeds(data);
     renderThreads(data);
+    renderMail(data);
     renderMemories(data);
     renderActivity(data);
     renderConnectors(data.status);
@@ -576,6 +618,31 @@
       if (briefHeadline) briefHeadline.textContent = 'I cannot reach the server.';
       if (briefDetail) briefDetail.textContent = error.message || 'Check that python server.py is running.';
       showToast(error.message || 'Home could not load.', true);
+    }
+  }
+
+  async function syncMail() {
+    if (!syncMailButton) return;
+    const label = syncMailButton.textContent;
+    syncMailButton.disabled = true;
+    syncMailButton.textContent = 'Syncing…';
+    try {
+      const result = await api('/connectors/gmail/sync', {
+        method: 'POST',
+        body: JSON.stringify({ force: true })
+      });
+      const proposals = Number(result.proposals_created || 0);
+      showToast(
+        `Mail sync: ${Number(result.fetched || 0)} fetched, `
+        + `${Number(result.cached || 0)} cached, `
+        + `${proposals} new ${proposals === 1 ? 'proposal' : 'proposals'}.`
+      );
+      await loadHome();
+    } catch (error) {
+      showToast(error.message || 'Mail sync failed.', true);
+    } finally {
+      syncMailButton.disabled = false;
+      syncMailButton.textContent = label;
     }
   }
 
@@ -823,6 +890,8 @@
 
   const refreshButton = $('refresh-home');
   if (refreshButton) refreshButton.addEventListener('click', loadHome);
+
+  if (syncMailButton) syncMailButton.addEventListener('click', syncMail);
 
   const openPaletteButton = $('open-palette');
   if (openPaletteButton) openPaletteButton.addEventListener('click', openPalette);

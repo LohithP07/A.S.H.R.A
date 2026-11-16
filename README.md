@@ -328,6 +328,8 @@ What a sync does, in order:
    encrypted. No body and no secret is ever logged.
 
 Home shows mail proposals in **Needs you** with *Add task* and *Ignore*. A
+**Recent threads** card lists the newest cached threads, and **Sync** runs an
+incremental poll in place, reporting what was fetched, cached, and proposed. A
 decision is terminal: a later sync refreshes an open proposal instead of
 duplicating it and never resurrects a rejected one.
 

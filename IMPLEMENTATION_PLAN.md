@@ -688,8 +688,9 @@ one of them is issued.
   502 for a mailbox failure), `GET /mail/threads`, `GET /mail/messages/{id}`
   (decrypts locally), `GET /proposals`, `POST /proposals/{id}/confirm|reject`,
   and `POST /cache/purge`.
-- [x] Home: mail proposals render in Needs You with Add task / Ignore, and
-  `recent.mail` lists the newest threads.
+- [x] Home: mail proposals render in Needs You with Add task / Ignore, a Recent
+  threads card lists the newest cached threads, and Sync runs an incremental
+  poll in place.
 - [x] Audit every sync, decision, and purge with no secret and no body.
 - [x] Tests: read-only verbs, cursor advance and rewind, thread grouping,
   classification and budget, model fallback, secret exclusion, DPAPI round

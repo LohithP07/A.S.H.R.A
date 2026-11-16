@@ -17,6 +17,9 @@ DEFAULT_MODEL = "claude-opus-4-8"
 DEFAULT_LOCAL_BASE = "http://127.0.0.1:11434"
 DEFAULT_LOCAL_MODEL = "qwen3.5:2b-q4_K_M"
 DEFAULT_PUBLIC_CLASSES = ("public", "internal")
+# The two answer models the owner can pick between from Home.
+CHAT_MODELS = ("local", "cloud")
+DEFAULT_CHAT_MODEL = "local"
 
 
 def _is_real_key(value: str) -> bool:
@@ -66,6 +69,10 @@ class AppConfig:
     privacy_default_lane: str = "local"
     privacy_allow_cloud: tuple[str, ...] = DEFAULT_PUBLIC_CLASSES
     privacy_refuse: tuple[str, ...] = ("secret",)
+    # The owner's pick in the Home model switcher.  ``local`` pins every turn
+    # to this machine; ``cloud`` lets the privacy router use the cloud lane
+    # where the class allows it.
+    chat_model: str = DEFAULT_CHAT_MODEL
 
     @property
     def configured(self) -> bool:
@@ -197,6 +204,12 @@ def _bounded_bool(data: dict, key: str, default: bool) -> bool:
     return default
 
 
+def _model_choice(value: object) -> str:
+    """Accept only a known answer model; a typo falls back to the default."""
+    text = str(value or "").strip().lower()
+    return text if text in CHAT_MODELS else DEFAULT_CHAT_MODEL
+
+
 def load_config(path: Path) -> AppConfig:
     """Read and validate config.json.
 
@@ -231,6 +244,7 @@ def load_config(path: Path) -> AppConfig:
     cloud = _section(raw, "cloud")
     privacy = _section(raw, "privacy")
     local = _section(raw, "local")
+    chat = _section(raw, "chat")
 
     return AppConfig(
         api_key=_text(raw, "api_key", PLACEHOLDER_API_KEY),
@@ -260,4 +274,5 @@ def load_config(path: Path) -> AppConfig:
             privacy.get("allow_cloud_for"), DEFAULT_PUBLIC_CLASSES
         ),
         privacy_refuse=_classes(privacy.get("refuse"), ("secret",)),
+        chat_model=_model_choice(chat.get("model")),
     )

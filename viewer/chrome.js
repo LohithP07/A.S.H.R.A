@@ -26,7 +26,13 @@
   function render(status) {
     const configured = Boolean(status && status.configured);
     const provider = String((status && status.provider) || '');
-    const local = configured && LOCAL_PROVIDERS.has(provider.toLowerCase());
+    const chatModel = String((status && status.chat_model) || '').toLowerCase();
+    const models = Array.isArray(status && status.models) ? status.models : [];
+    const chosen = models.find((item) => item.id === chatModel) || null;
+    const ready = chosen ? Boolean(chosen.available) : configured;
+    const local = chosen
+      ? chosen.lane === 'local'
+      : configured && LOCAL_PROVIDERS.has(provider.toLowerCase());
 
     const card = $('lane-card');
     const pulse = $('lane-pulse');
@@ -36,16 +42,23 @@
     const dot = $('lane-dot');
 
     if (card) {
-      card.classList.toggle('cloud', configured && !local);
-      card.classList.toggle('off', !configured);
+      card.classList.toggle('cloud', ready && !local);
+      card.classList.toggle('off', !ready);
     }
 
-    if (pulse) pulse.className = !configured || !local ? 'pulse amber' : 'pulse';
+    if (pulse) pulse.className = !ready || !local ? 'pulse amber' : 'pulse';
 
-    if (!configured) {
-      if (title) title.textContent = 'Model lane';
-      if (copy) copy.replaceChildren(line('Not configured', ' · add an API key in config.json'));
-      if (chip) chip.textContent = 'No model';
+    if (!ready) {
+      if (title) title.textContent = chosen ? `${chosen.label} lane` : 'Model lane';
+      if (copy) {
+        copy.replaceChildren(
+          line(
+            'Unavailable',
+            ` · ${chosen ? String(chosen.detail || 'not configured') : 'add an API key in config.json'}`
+          )
+        );
+      }
+      if (chip) chip.textContent = chosen ? `${chosen.label} unavailable` : 'No model';
       if (dot) dot.className = 'd amber';
       return;
     }
@@ -59,7 +72,11 @@
     }
 
     if (title) title.textContent = 'Cloud lane';
-    if (copy) copy.replaceChildren(line(provider || 'Provider', ' · prompts leave this machine'));
+    if (copy) {
+      copy.replaceChildren(
+        line((chosen && chosen.provider) || provider || 'Provider', ' · prompts leave this machine')
+      );
+    }
     if (chip) chip.textContent = 'Cloud lane';
     if (dot) dot.className = 'd amber';
   }

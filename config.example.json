@@ -19,6 +19,9 @@
     "allow_cloud_for": ["public", "internal"],
     "refuse": ["secret"]
   },
+  "chat": {
+    "model": "local"
+  },
   "max_notes": 6,
   "max_memories": 6,
   "max_history": 8,

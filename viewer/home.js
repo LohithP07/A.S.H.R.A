@@ -558,7 +558,21 @@
 
   function renderConnectors(status) {
     if (!connectorList) return;
-    const items = Array.isArray(status && status.integrations) ? status.integrations : [];
+    const items = Array.isArray(status && status.integrations) ? status.integrations.slice() : [];
+    const mail = status && status.mail ? status.mail : null;
+    if (mail && mail.enabled) {
+      const messages = mail.stats && Number(mail.stats.messages) ? Number(mail.stats.messages) : 0;
+      items.push({
+        name: 'Gmail · IMAP',
+        enabled: true,
+        connected: Boolean(mail.credential_ready) && !mail.last_error,
+        permission: mail.mode || 'read',
+        note: mail.last_error
+          ? String(mail.last_error)
+          : `${messages} ${messages === 1 ? 'message' : 'messages'}`,
+        error: mail.last_error || ''
+      });
+    }
     const live = items.filter((item) => item.connected).length;
 
     if (connectorCount) {
@@ -590,7 +604,7 @@
       row.append(element(
         'span',
         'meta',
-        `${tools} ${tools === 1 ? 'tool' : 'tools'} · ${item.permission || 'read'}`
+        item.note || `${tools} ${tools === 1 ? 'tool' : 'tools'} · ${item.permission || 'read'}`
       ));
       if (item.error) row.title = String(item.error);
       connectorList.append(row);

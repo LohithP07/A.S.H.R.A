@@ -237,11 +237,38 @@
     return `Memory proposal · ${String(kind || 'fact')}`;
   }
 
+  function dueLabel(timestamp) {
+    if (!timestamp) return '';
+    try {
+      return new Date(Number(timestamp) * 1000).toLocaleDateString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch (error) {
+      return '';
+    }
+  }
+
+  function proposalKicker(item) {
+    const label = String(item.kind || 'task');
+    return `Mail proposal · ${label}`;
+  }
+
+  function proposalText(item) {
+    const parts = [String(item.title || 'Proposal')];
+    if (item.person) parts.push(`from ${item.person}`);
+    const due = dueLabel(item.due_at);
+    if (due) parts.push(`due ${due}`);
+    return parts.join(' · ');
+  }
+
   function renderNeeds(data) {
     if (!needsList) return;
     const proposals = Array.isArray(data.needs_you.memories) ? data.needs_you.memories : [];
+    const mailProposals = Array.isArray(data.needs_you.proposals) ? data.needs_you.proposals : [];
     const approvals = Array.isArray(data.needs_you.approvals) ? data.needs_you.approvals : [];
-    const total = proposals.length + approvals.length;
+    const total = proposals.length + mailProposals.length + approvals.length;
 
     if (needsCount) {
       needsCount.textContent = String(total);
@@ -253,6 +280,33 @@
       needsList.append(emptyState('✓', 'Inbox zero. Nothing needs your approval right now.'));
       return;
     }
+
+    mailProposals.forEach((item) => {
+      const card = element('article', 'need proposal');
+      const kicker = element('p', 'need-kicker');
+      const dot = element('span', 'need-dot');
+      dot.style.background = kindColor(item.kind);
+      kicker.append(dot, document.createTextNode(proposalKicker(item)));
+      card.append(kicker);
+      card.append(element('p', 'need-text', proposalText(item)));
+      if (item.detail && item.detail !== item.title) {
+        card.append(element('p', 'need-detail', String(item.detail)));
+      }
+      const actions = element('div', 'need-actions');
+      const confirm = element('button', 'btn approve', 'Add task');
+      confirm.type = 'button';
+      confirm.dataset.kind = 'proposal';
+      confirm.dataset.id = item.id;
+      confirm.dataset.action = 'confirm';
+      const reject = element('button', 'btn deny', 'Ignore');
+      reject.type = 'button';
+      reject.dataset.kind = 'proposal';
+      reject.dataset.id = item.id;
+      reject.dataset.action = 'reject';
+      actions.append(confirm, reject);
+      card.append(actions);
+      needsList.append(card);
+    });
 
     proposals.forEach((item) => {
       const card = element('article', 'need');
@@ -335,6 +389,11 @@
           method: 'POST'
         });
         showToast(action === 'confirm' ? 'Memory confirmed.' : 'Proposal rejected.');
+      } else if (kind === 'proposal') {
+        await api(`/proposals/${encodeURIComponent(id)}/${encodeURIComponent(action)}`, {
+          method: 'POST'
+        });
+        showToast(action === 'confirm' ? 'Task accepted.' : 'Proposal ignored.');
       } else {
         const result = await api(`/approvals/${encodeURIComponent(id)}`, {
           method: 'POST',

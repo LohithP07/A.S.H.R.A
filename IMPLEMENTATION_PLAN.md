@@ -620,6 +620,105 @@ and Q8 stays installed as the quality fallback.
 
 ---
 
+## Phase 2UI — Aurora Rail (complete)
+
+The shared surface layer, so every page is the same product instead of three
+skins. It predates this branch but was missing from this log.
+
+- [x] One design system in `viewer/chrome.css` and `docs/design/aurora-rail.md`:
+  tokens, typography, components, surface rules, and breakpoints.
+- [x] A left rail (`viewer/chrome.js`) shared by Home, Brain, and Galaxy, with
+  the live lane card driven by `/status`.
+- [x] Home, Brain, and Galaxy redesigned against the same tokens.
+- [x] Searchable Galaxy with deep links, plus the list-view equivalent required
+  by accessibility rules.
+- [x] Local vendor assets and caching so the Galaxy loads without a CDN.
+
+### Phase 2UI acceptance criteria
+
+- The rail is identical on every page and reports the current model lane.
+- Every Galaxy affordance has a keyboard-reachable list equivalent.
+- No page depends on a third-party CDN to render.
+
+---
+
+## Phase 2E.1 — Email read over IMAP (complete)
+
+The first real external data. Mail is read from Gmail over IMAP, parsed and
+classified locally, cached encrypted, and turned into proposals the owner
+accepts or rejects. Nothing is written, sent, or marked read.
+
+The read path is deliberately narrow: TLS to `imap.gmail.com`, `SELECT` with
+`readonly=True`, `UID SEARCH` from a stored per-folder cursor, and
+`UID FETCH (BODY.PEEK[])`. `STORE`, `APPEND`, `COPY`, `MOVE`, `EXPUNGE`, and
+`DELETE` are named as forbidden verbs and a test fails the fake server if any
+one of them is issued.
+
+- [x] Add `ashra/connectors/gmail.py`: `GmailConnector` over `imaplib` with an
+  injectable client factory and cursor store, so every path is testable with no
+  mailbox and no credential.
+- [x] Sync `INBOX` and `[Gmail]/Sent Mail` (configurable, bounded to eight
+  folders), advancing a `(UIDVALIDITY, UID)` cursor per folder.
+- [x] Re-read a folder from the start when `UIDVALIDITY` changes; sources are
+  idempotent by external id, so a re-read updates instead of duplicating.
+- [x] Add `ashra/mailparse.py`: RFC 822 parsing, quoted-history and signature
+  removal, thread reconstruction from `References` / `In-Reply-To`, HTML
+  reduction, and `Message-ID`-based identity.
+- [x] Reduce attachments to metadata only (FR-E9); bytes are never stored,
+  quoted, or sent anywhere.
+- [x] Classify with rules first (`reply_needed`, `waiting`, `informational`,
+  `ignore`), then the local model only for ambiguous messages, capped at ten
+  calls per sync and recorded as a limitation when the cap is hit.
+- [x] Never send secret-class content to any model, including the local one.
+- [x] Add `ashra/untrusted.py`: a marker envelope around every external body
+  plus a deterministic directive scan (FR-P5). A suspected injection is stored
+  on the source and shown with the message; no tool is chosen from that text.
+- [x] Add `ashra/crypto.py`: DPAPI ciphertext at rest on Windows, a visibly
+  unencrypted `PlainCipher` elsewhere, and a scheme marker so a database moved
+  between machines fails to decrypt instead of returning nonsense.
+- [x] Schema v5: `connector_cursors`, `mail_messages` (ciphertext, hash, size,
+  metadata), and a generic `proposals` table reused by later phases.
+- [x] Add `ashra/mail.py`: `MailService` resolves the credential at call time,
+  runs the registry, caches bodies, and turns candidates into proposals with a
+  stable fingerprint, so a re-sync refreshes instead of duplicating and a
+  decided proposal is never resurrected.
+- [x] Retention: `POST /cache/purge` deletes cached messages outside the
+  configured window (default 90 days).
+- [x] API: `POST /connectors/{id}/sync` (409 for configuration or credential,
+  502 for a mailbox failure), `GET /mail/threads`, `GET /mail/messages/{id}`
+  (decrypts locally), `GET /proposals`, `POST /proposals/{id}/confirm|reject`,
+  and `POST /cache/purge`.
+- [x] Home: mail proposals render in Needs You with Add task / Ignore, and
+  `recent.mail` lists the newest threads.
+- [x] Audit every sync, decision, and purge with no secret and no body.
+- [x] Tests: read-only verbs, cursor advance and rewind, thread grouping,
+  classification and budget, model fallback, secret exclusion, DPAPI round
+  trip, purge, proposal lifecycle, and every API status path, all against a
+  fake IMAP server.
+
+### Phase 2E.1 acceptance criteria
+
+- IMAP sync, thread reconstruction, local classification, and a proposal queue
+  are all present and exercised by tests (PRD 15.2).
+- Read-only is verified by test: a write verb fails the suite.
+- No test needs a real credential or mailbox.
+- The password never appears in the database, an audit event, `/status`, or a
+  sync response.
+- A body is ciphertext on disk on Windows and still decrypts locally.
+
+### Deliberately deferred
+
+- **Calendar (2E.2).** iCal ingestion, recurrence, and free-slot search are a
+  separate branch.
+- **Attachments.** Metadata only in v1.0; content extraction belongs with the
+  file operator (3D).
+- **Per-thread deletion.** Retention is global in this phase; the PRD Q4 answer
+  also asks for per-thread deletion, which lands with the task ledger surface.
+- **Write access.** Drafts, sends, and flags wait for 2F/2G, behind approval
+  hardening.
+
+---
+
 ## Phase 2 - The Voice (implemented in this pass)
 
 - [x] Speak every answer with `speechSynthesis`, preferring a British English
@@ -845,10 +944,14 @@ ashra/
   remember.py               capture CRUD + graph rebuild
   tools.py                  permission tiers + tool registry + scoped filesystem
   agents/                   specialist registry, permission ceiling, child runner
-  connectors/               adapter contract, registry, replay fixture
+  connectors/               adapter contract, registry, replay fixture, config, Gmail IMAP
   integrations/             MCP client, integration config, tool registration
   mcp_server.py             optional read-only MCP filesystem server
   memory.py                 typed memory, lifecycle, retrieval, graph, health
+  mail.py                   email pipeline: sync, encrypted cache, proposals
+  mailparse.py              RFC 822 parsing, threading, classification
+  untrusted.py              untrusted-content envelope + injection scan
+  crypto.py                 DPAPI encryption at rest for cached private content
   orchestrator.py           bounded tool loop + approval continuation
   chat.py                   answer + streaming pipeline
 docs/prd/ashra-prd.pdf      v1.0 product requirements (authoritative scope)

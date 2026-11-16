@@ -123,13 +123,13 @@ class DatabaseTests(unittest.TestCase):
     # ------------------------------------------------------------------
     # connectors and sources (schema v4)
     # ------------------------------------------------------------------
-    def test_schema_reports_version_four(self) -> None:
+    def test_schema_reports_current_version(self) -> None:
         connection = sqlite3.connect(str(self.db.path))
         try:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
         finally:
             connection.close()
-        self.assertEqual(version, 4)
+        self.assertEqual(version, 5)
 
     def test_source_upsert_is_idempotent_by_external_id(self) -> None:
         source_id, created = self.db.upsert_source(
@@ -215,7 +215,7 @@ class DatabaseTests(unittest.TestCase):
         finally:
             connection.close()
         self.assertEqual(rows, {"m1": "internal", "m2": "private"})
-        self.assertEqual(version, 4)
+        self.assertEqual(version, 5)
 
 
 if __name__ == "__main__":

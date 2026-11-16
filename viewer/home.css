@@ -331,6 +331,13 @@ body {
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 12px;
 }
+.need-detail {
+  margin: 5px 0 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--faint);
+  overflow-wrap: anywhere;
+}
 .need-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 11px; }
 
 .btn {

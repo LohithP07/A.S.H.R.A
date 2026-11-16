@@ -720,6 +720,47 @@ one of them is issued.
 
 ---
 
+## Phase 2M.1 — Model switcher on Home (complete)
+
+The two lanes were real but the header chip was a label, not a control, and the
+router's cloud default could answer a public question with the cloud model while
+the chip said `ollama`. The chip is now the picker.
+
+- [x] Add `ashra/models.py`: a two-entry catalog (`local`, `cloud`) with provider,
+  model, availability, and a non-secret reason, plus an atomic writer for
+  `chat.model` that reads, edits one key, and `os.replace`s a sibling file.
+- [x] `AppConfig.chat_model` reads `chat.model`; an unknown value falls back to
+  `local` rather than breaking the app.
+- [x] `ChatService.route_for` honours the pick: **local** pins public turns to
+  the local lane, **cloud** leaves the privacy router in charge (cloud for
+  public/internal, local for private, refusal for secret). A secret-class
+  refusal is never converted into a cloud call.
+- [x] Default is `local`, matching `privacy.default_lane`. This is a deliberate
+  behaviour change: public general chat previously used the cloud lane by
+  default. The lane tests now opt into `chat.model: "cloud"` explicitly.
+- [x] API: `GET /models` reports the selection and both options; `POST
+  /models/select` persists a choice, answers `409 model_unavailable` instead of
+  writing an unusable lane, and `400 invalid_model` for anything else. `/status`
+  gains `chat_model` and `models`; `/chat` reports `lane` and `sensitivity`.
+- [x] Home: the chip is a button with an accessible listbox. Each option shows
+  its provider, model name, and privacy note; selecting one writes the choice,
+  refreshes Home, and updates the rail's lane card through the same `/status`
+  payload.
+- [x] Tests: catalog, default/parse/invalid selection, atomic preservation of
+  every other config key (including unrelated secrets), missing config, API
+  status/409/400, audit, and routing for both picks.
+
+### Phase 2M.1 acceptance criteria
+
+- The owner can switch models from Home without a restart, and the change is
+  visible on the next `/home` read.
+- Hidden or private content cannot be sent to the cloud by choosing a model;
+  only the router's allowed classes use it.
+- An unavailable model is refused, not persisted.
+- No endpoint or picker payload contains a credential value.
+
+---
+
 ## Phase 2 - The Voice (implemented in this pass)
 
 - [x] Speak every answer with `speechSynthesis`, preferring a British English

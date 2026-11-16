@@ -77,13 +77,17 @@ class LaneIntegrationTests(unittest.TestCase):
         self.vault = MemoryVault({"ashra/cloud": "cloud-secret"})
         self.write_config()
 
-    def write_config(self) -> None:
+    def write_config(self, model: str = "cloud") -> None:
+        # The lane tests exercise the privacy router, not the picker, so they
+        # opt into the cloud lane explicitly.  The picker's own default is
+        # local and is covered by tests/test_models.py.
         self.config_path.write_text(
             json.dumps(
                 {
                     "provider": "ollama",
                     "model": "qwen3.5:2b-q4_K_M",
                     "model_note": "local default",
+                    "chat": {"model": model},
                     "local": {
                         "model": "qwen3.5:2b-q4_K_M",
                         "api_base": "http://127.0.0.1:11434",
@@ -141,6 +145,26 @@ class LaneIntegrationTests(unittest.TestCase):
         self.assertEqual(factory.calls, ["nvidia"])
         self.assertEqual(factory.keys, ["cloud-secret"])
         self.assertEqual(factory.models, ["cloud-model"])
+
+    def test_local_selection_pins_public_content_to_the_local_lane(self) -> None:
+        self.write_config(model="local")
+        factory = RecordingFactory()
+        note = make_note("Our pricing strategy is value based.")
+        result = self.service([note], factory).ask("What is our pricing strategy?")
+
+        self.assertEqual(factory.calls, ["ollama"])
+        self.assertEqual(result.lane, "local")
+        self.assertEqual(result.sensitivity, "internal")
+        self.assertIn("local model is selected", result.route["reason"])
+
+    def test_local_selection_still_refuses_secret_content(self) -> None:
+        self.write_config(model="local")
+        factory = RecordingFactory()
+        note = make_note("Our pricing strategy is value based. password: hunter2")
+        result = self.service([note], factory).ask("What is our pricing strategy?")
+
+        self.assertEqual(factory.calls, [])
+        self.assertEqual(result.lane, "refusal")
 
     def test_a_private_turn_keeps_the_rest_of_the_session_local(self) -> None:
         # History is resent to the model on every turn.  Once a private turn is
@@ -223,6 +247,7 @@ class LaneIntegrationTests(unittest.TestCase):
                 {
                     "provider": "ollama",
                     "model": "qwen3.5:2b-q4_K_M",
+                    "chat": {"model": "cloud"},
                     "local": {"model": "qwen3.5:2b-q4_K_M"},
                     "max_notes": 3,
                     "max_memories": 0,

@@ -44,6 +44,8 @@
   const briefDate = $('brief-date');
   const briefStats = $('brief-stats');
   const statusChip = $('status-chip');
+  const modelPicker = $('model-picker');
+  const modelMenu = $('model-menu');
   const heroGreeting = $('hero-greeting');
   const railLane = $('rail-lane');
   const railTrack = $('rail-track');
@@ -62,6 +64,9 @@
   let paletteIndex = 0;
   let paletteMatches = [];
   let homeData = null;
+  let modelOptions = [];
+  let selectedModel = '';
+  let statusReady = false;
 
   function element(tag, className, text) {
     const node = document.createElement(tag);
@@ -161,18 +166,114 @@
     return wrap;
   }
 
-  function setStatus(status) {
+  function modelById(id) {
+    return modelOptions.find((item) => item.id === id) || null;
+  }
+
+  function renderModelChip() {
     if (!statusChip) return;
-    const configured = Boolean(status && status.configured);
-    statusChip.classList.toggle('offline', !configured);
-    if (window.ASHRALane) window.ASHRALane.render(status);
-    if (!configured) {
-      statusChip.textContent = 'Model not configured';
+    const chosen = modelById(selectedModel);
+    if (!chosen) {
+      statusChip.textContent = statusReady ? 'Choose a model' : 'Model not configured';
+      statusChip.classList.toggle('offline', !statusReady);
       return;
     }
-    const provider = status.provider || 'provider';
-    const model = status.model || 'model';
-    statusChip.textContent = `${provider} · ${model}`;
+    statusChip.textContent = `${chosen.provider || chosen.label} · ${chosen.model || 'unconfigured'}`;
+    statusChip.classList.toggle('offline', !chosen.available);
+    statusChip.title = chosen.available
+      ? `${chosen.label} model · ${chosen.note}`
+      : `${chosen.label} model unavailable · ${chosen.detail}`;
+    statusChip.setAttribute(
+      'aria-label',
+      `Answer model: ${chosen.label}, ${chosen.model || 'unconfigured'}. Choose another model.`
+    );
+  }
+
+  function renderModelMenu() {
+    if (!modelMenu) return;
+    modelMenu.replaceChildren();
+    if (!modelOptions.length) return;
+    modelOptions.forEach((option) => {
+      const item = element('button', 'model-option');
+      item.type = 'button';
+      item.setAttribute('role', 'option');
+      item.dataset.model = option.id;
+      item.setAttribute('aria-selected', option.id === selectedModel ? 'true' : 'false');
+      if (!option.available) item.classList.add('unavailable');
+
+      const head = element('span', 'model-option-head');
+      head.append(element('span', 'model-option-name', option.label || option.id));
+      if (option.id === selectedModel) {
+        head.append(element('span', 'model-option-check', '✓'));
+      }
+      const model = element('span', 'model-option-model', option.model || 'unconfigured');
+      const note = element(
+        'span',
+        'model-option-note',
+        option.available ? option.note : option.detail
+      );
+      item.append(head, model, note);
+      modelMenu.append(item);
+    });
+  }
+
+  function openModelMenu() {
+    if (!modelMenu || !modelOptions.length) return;
+    modelMenu.hidden = false;
+    if (modelPicker) modelPicker.classList.add('open');
+    if (statusChip) statusChip.setAttribute('aria-expanded', 'true');
+    const current = modelMenu.querySelector('[aria-selected="true"]')
+      || modelMenu.querySelector('.model-option');
+    if (current) current.focus();
+  }
+
+  function closeModelMenu() {
+    if (!modelMenu || modelMenu.hidden) return;
+    modelMenu.hidden = true;
+    if (modelPicker) modelPicker.classList.remove('open');
+    if (statusChip) statusChip.setAttribute('aria-expanded', 'false');
+  }
+
+  function modelMenuOpen() {
+    return Boolean(modelMenu && !modelMenu.hidden);
+  }
+
+  async function chooseModel(id) {
+    const option = modelById(id);
+    closeModelMenu();
+    if (!option || id === selectedModel) return;
+    if (!option.available) {
+      showToast(option.detail || 'That model is not available.', true);
+      return;
+    }
+    if (statusChip) statusChip.disabled = true;
+    try {
+      const data = await api('/models/select', {
+        method: 'POST',
+        body: JSON.stringify({ model: id })
+      });
+      selectedModel = data.selected || id;
+      if (Array.isArray(data.models)) modelOptions = data.models;
+      renderModelChip();
+      renderModelMenu();
+      showToast(`Model switched to ${modelById(selectedModel)?.label || selectedModel}.`);
+      await loadHome();
+    } catch (error) {
+      showToast(error.message || 'Could not switch models.', true);
+    } finally {
+      if (statusChip) statusChip.disabled = false;
+    }
+  }
+
+  function setStatus(status) {
+    if (!statusChip) return;
+    statusReady = Boolean(status && status.configured);
+    modelOptions = Array.isArray(status && status.models) ? status.models : [];
+    selectedModel = String((status && status.chat_model) || '');
+    if (!selectedModel && modelOptions.length) selectedModel = modelOptions[0].id;
+    if (window.ASHRALane) window.ASHRALane.render(status);
+    renderModelChip();
+    renderModelMenu();
   }
 
   function renderStats(status, stats) {
@@ -904,6 +1005,54 @@
 
   const refreshButton = $('refresh-home');
   if (refreshButton) refreshButton.addEventListener('click', loadHome);
+
+  if (statusChip) {
+    statusChip.addEventListener('click', () => {
+      if (modelMenuOpen()) closeModelMenu();
+      else openModelMenu();
+    });
+    statusChip.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        openModelMenu();
+      } else if (event.key === 'Escape') {
+        closeModelMenu();
+      }
+    });
+  }
+
+  if (modelMenu) {
+    modelMenu.addEventListener('click', (event) => {
+      const button = event.target.closest('button[data-model]');
+      if (button) chooseModel(button.dataset.model);
+    });
+    modelMenu.addEventListener('keydown', (event) => {
+      const items = Array.from(modelMenu.querySelectorAll('.model-option'));
+      if (!items.length) return;
+      const index = items.indexOf(document.activeElement);
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeModelMenu();
+        if (statusChip) statusChip.focus();
+        return;
+      }
+      let next = -1;
+      if (event.key === 'ArrowDown') next = (index + 1) % items.length;
+      else if (event.key === 'ArrowUp') next = (index - 1 + items.length) % items.length;
+      else if (event.key === 'Home') next = 0;
+      else if (event.key === 'End') next = items.length - 1;
+      if (next >= 0) {
+        event.preventDefault();
+        items[next].focus();
+      }
+    });
+  }
+
+  document.addEventListener('click', (event) => {
+    if (!modelMenuOpen()) return;
+    if (modelPicker && modelPicker.contains(event.target)) return;
+    closeModelMenu();
+  });
 
   if (syncMailButton) syncMailButton.addEventListener('click', syncMail);
 

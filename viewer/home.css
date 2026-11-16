@@ -108,6 +108,93 @@ body {
 }
 .status-chip.offline::before { background: var(--amber); box-shadow: 0 0 10px rgba(255, 200, 97, 0.9); }
 
+/* the model chip doubles as the picker button */
+.model-picker {
+  position: relative;
+  display: inline-flex;
+}
+.model-picker .status-chip {
+  padding-right: 32px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.model-picker .status-chip:disabled { cursor: default; opacity: 0.65; }
+.model-picker .status-chip:focus-visible {
+  outline: 2px solid rgba(167, 139, 250, 0.55);
+  outline-offset: 2px;
+}
+.model-picker .status-chip::after {
+  content: "";
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -5px;
+  border-right: 1.5px solid var(--faint);
+  border-bottom: 1.5px solid var(--faint);
+  transform: rotate(45deg);
+  transition: transform 160ms ease, margin-top 160ms ease;
+}
+.model-picker.open .status-chip::after {
+  margin-top: -2px;
+  transform: rotate(-135deg);
+}
+
+.model-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  width: min(300px, calc(100vw - 40px));
+  padding: 6px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: #12101c;
+  box-shadow: 0 20px 46px rgba(0, 0, 0, 0.6);
+}
+.model-menu[hidden] { display: none; }
+.model-option {
+  display: grid;
+  gap: 1px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-2);
+  text-align: left;
+}
+.model-option:hover,
+.model-option:focus-visible {
+  outline: none;
+  background: rgba(255, 255, 255, 0.06);
+}
+.model-option[aria-selected="true"] { background: rgba(167, 139, 250, 0.14); }
+.model-option.unavailable { opacity: 0.55; }
+.model-option-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.model-option-name { font-size: 13px; font-weight: 500; color: var(--ink); }
+.model-option-check { font-size: 12px; color: var(--lime); }
+.model-option-model {
+  overflow: hidden;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.model-option-note {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--faint);
+}
+
 .key {
   height: 38px;
   padding: 0 13px;

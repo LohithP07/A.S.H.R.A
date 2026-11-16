@@ -50,11 +50,16 @@ Two lanes are configured in `config.json`: a **local** lane that never leaves th
     "default_lane": "local",
     "allow_cloud_for": ["public", "internal"],
     "refuse": ["secret"]
+  },
+  "chat": {
+    "model": "local"
   }
 }
 ```
 
 Supported provider values are `ollama`, `anthropic`, `nvidia`, and `openai_compatible`. The local lane needs Ollama running on `127.0.0.1:11434` with the configured model pulled; `GET /health/local` reports `ok`, `down`, or `model_missing`.
+
+`chat.model` is the owner's pick between the two answer models. Click the model chip in Home's top-right corner to switch without a restart: the choice is written back to `config.json` and read on the next question. **Local** pins every turn to this machine; **Cloud** still goes through the privacy router, so public and internal content may use the cloud lane, private content stays local, and secret content is refused. The picker never offers a model that is not configured: `POST /models/select` answers `409 model_unavailable` instead of writing an unusable choice, and `GET /models` lists both options without ever returning a credential.
 
 No key belongs in `config.json`. Store one in Windows Credential Manager instead:
 
